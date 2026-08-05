@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MANIFESTO · Visual Generator</title>
+<style>
+:root{--bg:#0B0C0E;--edge:#C9C9C2;--mesh:#E6E6DF;--dot:#DEDED6;--muted:#7C7B72;--panel:#16171B;--panel2:#101114;--line:#2A2C31;--txt:#CFCEC6;--accent:#2C30E6;--struck:#5A5B63;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:var(--mono)}
+.app{min-height:100%;display:flex;flex-direction:column}
+.toolbar{display:flex;gap:11px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.05em}
+.brand{font-weight:600}.brand small{color:var(--muted);font-weight:400;letter-spacing:.14em;margin-left:8px}
+.sp{flex:1}label{display:inline-flex;gap:6px;align-items:center;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;font-size:10.5px}
+input[type=number]{width:66px}input[type=number],select{background:#0c0d10;border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:12px;padding:6px 7px}
+input[type=range]{accent-color:var(--accent);width:78px}input[type=checkbox]{accent-color:var(--accent)}
+button{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;background:transparent;color:var(--txt);border:1px solid var(--line);padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--txt)}button.pri{border-color:var(--accent);color:#c9caff}button.pri:hover{background:var(--accent);color:#fff}
+.stage{flex:1;display:flex;align-items:center;justify-content:center;padding:20px}
+.stage svg{display:block;width:auto;height:auto;max-width:94vw;max-height:86vh;cursor:pointer}
+.hint{font-size:10px;color:var(--muted);padding:0 16px 10px;letter-spacing:.05em}
+</style></head><body>
+<div class="app">
+<div class="toolbar">
+<span class="brand">yasp<small>MANIFESTO · VISUAL GENERATOR</small></span><span class="sp"></span>
+<label>Visual <select id="scene">
+<option value="door">01 · The Door Locked</option>
+<option value="decision">02 · The Decision (Tuesday)</option>
+<option value="thursday">03 · Results by Thursday</option>
+<option value="pitch">04 · The Product is the Pitch</option>
+<option value="pitch2">04B · The Product is the Pitch (founder)</option>
+<option value="span">05 · Nothing Stood in the Way</option>
+<option value="builders">06 · Key Visual — Wafer</option>
+<option value="builders2">06B · Key Visual — Six Dies</option>
+</select></label>
+<label>Seed <input id="seed" type="number" value="7"></label><button id="rnd">↻</button>
+<label>Accent <select id="accent"><option value="#2C30E6">Yasp Blue</option><option value="#93A487">Sage</option><option value="#C98A4B">Copper</option><option value="#F0E8D8">Cream</option></select></label>
+<label>Zoom <input id="zoom" type="range" min="0.5" max="1.7" step="0.02" value="1"></label>
+<label>Rotate <input id="az" type="range" min="-40" max="75" value="28"></label>
+<label>Tilt <input id="el" type="range" min="6" max="72" value="18"></label>
+<label>Line <input id="lw" type="range" min="0.4" max="2.6" step="0.1" value="1"></label>
+<label>Text <input id="ts" type="range" min="0.6" max="2" step="0.1" value="1"></label>
+<label>Layers <input id="spread" type="range" min="0.5" max="2.4" step="0.05" value="1"></label>
+<label>Gap <input id="lg" type="range" min="0.6" max="2.6" step="0.1" value="1"></label>
+<label>Dist <input id="ld" type="range" min="0.4" max="2.4" step="0.05" value="1"></label>
+<label><input id="labels" type="checkbox" checked> Labels</label>
+<button id="svg">SVG</button><button id="png" class="pri">PNG</button>
+</div>
+<div class="stage" id="stage"></div>
+<div class="hint">Six manifesto visuals — one conceit each, all in perspective 3D, one house style. Click the image to open the copy panel, then Cmd/Ctrl-C. Rotate / Tilt reset to each visual's default on switch.</div></div>
+<script>
+// yasp — MANIFESTO VISUAL GENERATOR. Sibling of yasp-matrix / yasp-descent.
+// Same house toolkit (perspective camera + branded 3D primitives). Each visual = one story beat, one conceit.
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
+function hsl2hex(h,sa,l){sa/=100;l/=100;h=((h%360)+360)%360;const a=sa*Math.min(l,1-l);const k=n=>(n+h/30)%12;const fch=n=>{const c=l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return Math.round(255*c);};return '#'+((1<<24)+(fch(0)<<16)+(fch(8)<<8)+fch(4)).toString(16).slice(1);}
+const V={add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],mul:(a,s)=>[a[0]*s,a[1]*s,a[2]*s],lerp:(a,b,t)=>[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]};
+
+const SCENE_LIST=['door','decision','thursday','pitch','pitch2','span','builders','builders2'];
+const SCENE_NAME={door:'THE DOOR LOCKED BEHIND THEM',decision:'IT TAKES A DECISION NOW',thursday:'RESULTS BY THURSDAY',pitch:'THE PRODUCT IS THE PITCH',pitch2:'THE PRODUCT IS THE PITCH',span:'NOTHING STOOD IN THE WAY',builders:'HARDWARE BELONGS TO THE BUILDERS',builders2:'HARDWARE BELONGS TO THE BUILDERS'};
+const SCENE_NO={door:'01',decision:'02',thursday:'03',pitch:'04',pitch2:'04B',span:'05',builders:'06',builders2:'06B'};
+
+function build(opts){
+  opts=opts||{};
+  const scene=opts.scene||'door';
+  const seed=opts.seed||7, rand=mulberry32(seed);
+  const accent=opts.accent||'#2C30E6', labels=opts.labels!==false;
+  const lw=opts.lineWeight==null?1:opts.lineWeight, ts=opts.textScale==null?1:opts.textScale;
+  const zoom=opts.zoom==null?1:opts.zoom, lg=opts.labelGap==null?1:opts.labelGap, ld=opts.labelDist==null?1:opts.labelDist, spread=opts.spread==null?1:opts.spread;
+
+  const CAN={door:[1520,940],decision:[1540,760],thursday:[1520,900],pitch:[1560,1200],pitch2:[1520,1060],span:[1560,940],builders:[1460,1180],builders2:[1460,1180]};
+  let [LW,Ht]=CAN[scene]||[1480,1040];
+  const CAM={door:{az:26,el:20,dist:3.0},decision:{az:24,el:30,dist:6.0},thursday:{az:24,el:18,dist:3.0},pitch:{az:30,el:31,dist:3.1},pitch2:{az:16,el:15,dist:3.0},span:{az:20,el:16,dist:3.1},builders:{az:28,el:26,dist:3.2}};
+  const cam=CAM[scene]||{az:28,el:18,dist:3.0};
+  const az=(opts.az==null?cam.az:opts.az)*Math.PI/180, el=(opts.el==null?cam.el:opts.el)*Math.PI/180, dist=opts.dist||cam.dist;
+
+  const T=[0,0,0],UP=[0,0,1];
+  const E=[T[0]+dist*Math.sin(az)*Math.cos(el),T[1]-dist*Math.cos(az)*Math.cos(el),T[2]+dist*Math.sin(el)];
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],norm=a=>{const m=Math.hypot(...a);return[a[0]/m,a[1]/m,a[2]/m];};
+  const fwd=norm(sub(T,E)),right=norm(cross(fwd,UP)),up=cross(right,fwd);
+  const raw=p=>{const r=[p[0]-E[0],p[1]-E[1],p[2]-E[2]];const cz=dot(r,fwd);return[dot(r,right)/cz,dot(r,up)/cz,cz];};
+  let sc=1,cX=0,cY=0;
+  function fit(pts,mar){mar=mar||120;let mnX=1e9,mxX=-1e9,mnY=1e9,mxY=-1e9;for(const p of pts){const r=raw(p);mnX=Math.min(mnX,r[0]);mxX=Math.max(mxX,r[0]);mnY=Math.min(mnY,r[1]);mxY=Math.max(mxY,r[1]);}
+    sc=Math.min((LW-2*mar)/(mxX-mnX||1),(Ht-2*mar)/(mxY-mnY||1))*zoom;cX=(mnX+mxX)/2;cY=(mnY+mxY)/2;}
+  const P=w=>{const r=raw(w);return[LW/2+(r[0]-cX)*sc,Ht*0.47-(r[1]-cY)*sc,r[2]];};
+  const f=n=>Math.round(n*10)/10;const parts=[];const push=x=>parts.push(x);
+  push(`<rect x="0" y="0" width="${LW}" height="${Ht}" fill="var(--bg)"/>`);
+
+  // ---------- shared branded primitives (from the house toolkit) ----------
+  const LINE=(a,b,st,sw,op,dash)=>`<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="${st}" stroke-width="${f((sw||1)*lw)}" stroke-opacity="${op==null?1:op}"${dash?` stroke-dasharray="${dash}"`:''}/>`;
+  const seg=(wa,wb,st,sw,op,dash)=>push(LINE(P(wa),P(wb),st,sw,op,dash));
+  const QUAD=(A,B,C,D,col,op,st,sw)=>`<polygon points="${f(A[0])},${f(A[1])} ${f(B[0])},${f(B[1])} ${f(C[0])},${f(C[1])} ${f(D[0])},${f(D[1])}" fill="${col||'none'}"${op!=null?` fill-opacity="${op}"`:''}${st?` stroke="${st}" stroke-width="${f((sw||1)*lw)}"`:''}/>`;
+  const polyW=(ws,col,op,st,sw)=>{const p=ws.map(P);return `<polygon points="${p.map(q=>f(q[0])+','+f(q[1])).join(' ')}" fill="${col||'none'}"${op!=null?` fill-opacity="${op}"`:''}${st?` stroke="${st}" stroke-width="${f((sw||1)*lw)}"`:''}/>`;};
+  const hxsh=(base,m)=>'#'+base.map(v=>{const x=Math.max(0,Math.min(255,Math.round(v*m)));return x.toString(16).padStart(2,'0');}).join('');
+  // extruded box with camera-facing walls (world coords)
+  function box3W(x0,x1,y0,y1,zb,h,base,topOverride){const zt=zb+h;const xPos=E[0]>((x0+x1)/2),yPos=E[1]>((y0+y1)/2);const xe=xPos?x1:x0,ye=yPos?y1:y0;let s='';
+    if(h>0.001){s+=QUAD(P([xe,y0,zt]),P([xe,y1,zt]),P([xe,y1,zb]),P([xe,y0,zb]),hxsh(base,0.55),1,'var(--edge)',0.5);s+=QUAD(P([x0,ye,zt]),P([x1,ye,zt]),P([x1,ye,zb]),P([x0,ye,zb]),hxsh(base,0.4),1,'var(--edge)',0.5);}
+    s+=QUAD(P([x0,y0,zt]),P([x1,y0,zt]),P([x1,y1,zt]),P([x0,y1,zt]),topOverride||hxsh(base,1),1,'var(--edge)',0.6);push(s);return {top:zt};}
+  function box3ghost(x0,x1,y0,y1,zb,h,col){const zt=zb+h;const c=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]];let s='';col=col||'var(--edge)';
+    for(let k=0;k<4;k++){const a=c[k],b=c[(k+1)%4];s+=LINE(P([a[0],a[1],zt]),P([b[0],b[1],zt]),col,0.9,0.3,'5 5');s+=LINE(P([a[0],a[1],zb]),P([b[0],b[1],zb]),col,0.9,0.2,'5 5');}
+    for(const cc of c)s+=LINE(P([cc[0],cc[1],zb]),P([cc[0],cc[1],zt]),col,0.9,0.2,'5 5');push(s);}
+  function planeXY(zc,x0,x1,y0,y1,glass){const A=P([x0,y0,zc]),B=P([x1,y0,zc]),C=P([x1,y1,zc]),D=P([x0,y1,zc]);push(`<polygon points="${[A,B,C,D].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="var(--mesh)" fill-opacity="${glass?0.05:0.02}" stroke="var(--edge)" stroke-width="${f(1*lw)}" stroke-opacity="0.4"/>`);}
+  function gridPlane(zc,x0,x1,y0,y1,nx,ny,op,col){let s='';col=col||'var(--edge)';op=op==null?0.22:op;for(let i=0;i<=nx;i++){const x=x0+(x1-x0)*i/nx;s+=LINE(P([x,y0,zc]),P([x,y1,zc]),col,0.5,op);}for(let j=0;j<=ny;j++){const y=y0+(y1-y0)*j/ny;s+=LINE(P([x0,y,zc]),P([x1,y,zc]),col,0.5,op);}push(s);}
+  // thin glass wall panel spanning a line (ax,ay)->(bx,by) from z0 to z1 — translucent, mullioned, accent top edge
+  function glassPanel(ax,ay,bx,by,z0,z1,tintOp,nx,nz){tintOp=tintOp==null?0.06:tintOp;nx=nx||3;nz=nz||3;
+    const A=P([ax,ay,z0]),B=P([bx,by,z0]),C=P([bx,by,z1]),D=P([ax,ay,z1]);let s='';
+    s+=`<polygon points="${[A,B,C,D].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="var(--mesh)" fill-opacity="${tintOp}" stroke="var(--edge)" stroke-width="${f(1*lw)}" stroke-opacity="0.5"/>`;
+    for(let i=1;i<nx;i++){const t=i/nx;s+=LINE(P([ax+(bx-ax)*t,ay+(by-ay)*t,z0]),P([ax+(bx-ax)*t,ay+(by-ay)*t,z1]),'var(--edge)',0.5,0.28);}
+    for(let j=1;j<nz;j++){const t=j/nz;s+=LINE(P([ax,ay,z0+(z1-z0)*t]),P([bx,by,z0+(z1-z0)*t]),'var(--edge)',0.5,0.22);}
+    s+=LINE(C,D,accent,1,0.55); // lit top edge
+    push(s);}
+  // full-edge extruded slab (every visible edge drawn — never looks unfinished) + unique top-face content by kind
+  function slab3D(cx,hx,hy,z,h,kind){
+    const x0=cx-hx,x1=cx+hx,y0=-hy,y1=hy,zt=z+h;const c=(x,y,zz)=>P([x,y,zz]);
+    const B=[c(x0,y0,z),c(x1,y0,z),c(x1,y1,z),c(x0,y1,z)];
+    const Tp=[c(x0,y0,zt),c(x1,y0,zt),c(x1,y1,zt),c(x0,y1,zt)];
+    const xPos=E[0]>cx,yPos=E[1]>0,xe=xPos?x1:x0,ye=yPos?y1:y0;
+    let s='';
+    s+=QUAD(c(xe,y0,zt),c(xe,y1,zt),c(xe,y1,z),c(xe,y0,z),'#0d0e11',0.45);
+    s+=QUAD(c(x0,ye,zt),c(x1,ye,zt),c(x1,ye,z),c(x0,ye,z),'#090a0c',0.45);
+    s+=QUAD(Tp[0],Tp[1],Tp[2],Tp[3],kind==='product'?'#0f1120':'#141519',kind==='product'?0.22:0.13);
+    push(s);
+    const gx=u=>x0+(x1-x0)*u,gy=v=>y0+(y1-y0)*v;
+    const qd=(u0,v0,u1,v1,col,op)=>QUAD(P([gx(u0),gy(v0),zt+0.002]),P([gx(u1),gy(v0),zt+0.002]),P([gx(u1),gy(v1),zt+0.002]),P([gx(u0),gy(v1),zt+0.002]),col,op);
+    const ln=(u0,v0,u1,v1,col,sw,op)=>LINE(P([gx(u0),gy(v0),zt+0.002]),P([gx(u1),gy(v1),zt+0.002]),col,sw,op);
+    let t='';
+    if(kind==='problem'){const C=14,R=7; // COLUMNAR field — a regular grid of columns of varying height (friction/barriers)
+      for(let i=0;i<C;i++)for(let j=0;j<R;j++){const u=0.06+0.88*(i+0.5)/C,v=0.14+0.72*(j+0.5)/R;
+        const hh=0.035+0.075*(0.5+0.5*Math.sin(i*0.8+seed*0.5)*Math.cos(j*1.0+seed*0.3));const hot=((i*3+j*5+seed)%19)<2;
+        const b=P([gx(u),gy(v),zt+0.002]),tp=P([gx(u),gy(v),zt+0.002+hh]);
+        t+=LINE(b,tp,hot?accent:'var(--mesh)',hot?1.1:0.8,hot?0.9:0.5);}}
+    else if(kind==='product'){t+=qd(0.07,0.14,0.93,0.86,accent,0.92); // solid blue surface
+      for(let i=0;i<=10;i++){const u=0.07+0.86*i/10;t+=ln(u,0.14,u,0.86,'var(--edge)',0.45,0.18);}
+      for(let j=0;j<=7;j++){const v=0.14+0.72*j/7;t+=ln(0.07,v,0.93,v,'var(--edge)',0.45,0.18);}}
+    else if(kind==='market'){const ax=0.08,bx=0.92,ay=0.14,by=0.86,G=10; // cache-plane — fine grid + validated cells
+      for(let i=0;i<=G;i++){const u=ax+(bx-ax)*i/G;t+=ln(u,ay,u,by,'var(--edge)',0.4,0.2);}
+      for(let j=0;j<=G;j++){const v=ay+(by-ay)*j/G;t+=ln(ax,v,bx,v,'var(--edge)',0.4,0.2);}
+      const rr=mulberry32(seed*23+5);for(let i=0;i<=G;i++)for(let j=0;j<=G;j++){const u=ax+(bx-ax)*i/G,v=ay+(by-ay)*j/G,on=rr()<0.38;const q=P([gx(u),gy(v),zt+0.003]);t+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${on?1.5:0.9}" fill="${on?accent:'var(--dot)'}" fill-opacity="${on?0.8:0.4}"/>`;}}
+    else if(kind==='team'){const ax=0.08,bx=0.92,ay=0.14,by=0.86,st=0.058; // fine, low-key cross-hatch weave
+      for(let c=ay-bx;c<=by-ax;c+=st){const uA=Math.max(ax,ay-c),uB=Math.min(bx,by-c);if(uA<uB-1e-4)t+=ln(uA,uA+c,uB,uB+c,'var(--mesh)',0.4,0.18);}
+      for(let c=ax+ay;c<=bx+by;c+=st){const uA=Math.max(ax,c-by),uB=Math.min(bx,c-ay);if(uA<uB-1e-4)t+=ln(uA,c-uA,uB,c-uB,'var(--mesh)',0.4,0.18);}}
+    else if(kind==='ask'){const L=11,mid=Math.floor(L*0.5); // gentle low-key ridgelines
+      for(let k=0;k<L;k++){const base=0.16+0.68*k/L;let d='';for(let i=0;i<=30;i++){const uu=0.08+0.84*i/30,vv=base+0.016*Math.sin(uu*8.5+k*0.7);const p=P([gx(uu),gy(vv),zt+0.002]);d+=(i?'L':'M')+f(p[0])+','+f(p[1]);}t+=`<path d="${d}" fill="none" stroke="${k===mid?accent:'var(--mesh)'}" stroke-width="${f((k===mid?0.8:0.5)*lw)}" stroke-opacity="${k===mid?0.5:0.22}"/>`;}}
+    push(t);
+    let e='';for(let k=0;k<4;k++)e+=LINE(Tp[k],Tp[(k+1)%4],kind==='product'?accent:'var(--edge)',1,kind==='product'?0.75:0.8);
+    for(let k=0;k<4;k++)e+=LINE(B[k],Tp[k],'var(--edge)',0.9,0.5);
+    for(let k=0;k<4;k++)e+=LINE(B[k],B[(k+1)%4],'var(--edge)',0.8,0.38);push(e);}
+  // silicon die in perspective (iridescent top)
+  function dieRich(wc,hs,hgt,opt){opt=opt||{};hs=hs||0.30;hgt=hgt==null?0.05:hgt;const cx=wc[0],cy=wc[1],cz=wc[2];const x0=cx-hs,x1=cx+hs,y0=cy-hs,y1=cy+hs,zt=cz+hgt;
+    const xPos=E[0]>cx,yPos=E[1]>cy,xe=xPos?x1:x0,ye=yPos?y1:y0;let s='';
+    if(hgt>0.001){s+=QUAD(P([xe,y0,zt]),P([xe,y1,zt]),P([xe,y1,cz]),P([xe,y0,cz]),'#0e0f12',1);s+=QUAD(P([x0,ye,zt]),P([x1,ye,zt]),P([x1,ye,cz]),P([x0,ye,cz]),'#0a0b0d',1);}
+    s+=QUAD(P([x0,y0,zt]),P([x1,y0,zt]),P([x1,y1,zt]),P([x0,y1,zt]),opt.dark?'#0f1013':'#141414',1);
+    const TL=P([x0,y0,zt]),TR=P([x1,y0,zt]),BR=P([x1,y1,zt]),BL=P([x0,y1,zt]);
+    s+=`<polygon points="${[TL,TR,BR,BL].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="${opt.dim?'var(--muted)':'#9aa0a6'}" stroke-width="${f((opt.dim?1:1.6)*lw)}" stroke-opacity="${opt.dim?0.5:0.9}"/>`;
+    const g=opt.g||4,cellf=opt.cell==null?0.82:opt.cell,pad=0.14,gx0=x0+(x1-x0)*pad,gx1=x1-(x1-x0)*pad,gy0=y0+(y1-y0)*pad,gy1=y1-(y1-y0)*pad;
+    if(opt.inner){s+=`<polygon points="${[P([gx0,gy0,zt]),P([gx1,gy0,zt]),P([gx1,gy1,zt]),P([gx0,gy1,zt])].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="#6b7076" stroke-width="${f(0.7*lw)}" stroke-opacity="0.5"/>`;}
+    for(let a=0;a<g;a++)for(let b=0;b<g;b++){const u0=gx0+(gx1-gx0)*a/g,u1=gx0+(gx1-gx0)*(a+cellf)/g,v0=gy0+(gy1-gy0)*b/g,v1=gy0+(gy1-gy0)*(b+cellf)/g;const gu=a/g,gv=b/g;
+      const baseH=opt.hue!=null?(opt.hue+gu*10-gv*5):(58+(opt.shift||0)+gu*80-gv*14);
+      const col=opt.dim?hsl2hex(210,6,30+gu*8):hsl2hex(baseH,opt.sat==null?68:opt.sat,(opt.lit==null?54:opt.lit)+gu*(opt.hue!=null?16:10));
+      s+=QUAD(P([u0,v0,zt]),P([u1,v0,zt]),P([u1,v1,zt]),P([u0,v1,zt]),col,opt.dim?0.5:1);}
+    push(s);return {top:zt,ctr:[cx,cy,zt]};}
+  function cloud(w,rad,nn,col){const c=P(w);let s='';col=col||'var(--dot)';for(let k=0;k<(nn||60);k++){const an=rand()*6.283,rr=(rad||60)*Math.pow(rand(),0.6);const dep=rr/(rad||60);s+=`<circle cx="${f(c[0]+Math.cos(an)*rr)}" cy="${f(c[1]+Math.sin(an)*rr*0.62)}" r="${rand()<0.14?1.9:1.15}" fill="${col}" fill-opacity="${f(0.25+0.55*dep+(rand()-0.5)*0.2)}"/>`;}push(s);}
+  const node=(w,r,fill,op)=>{const c=P(w);push(`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="${f(r)}" fill="${fill}" fill-opacity="${op==null?1:op}"/>`);};
+  const ring2=(w,r,st,op,sw)=>{const c=P(w);push(`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="${f(r)}" fill="none" stroke="${st}" stroke-width="${f((sw||1.2)*lw)}" stroke-opacity="${op==null?0.7:op}"/>`);};
+  function glowRoute(wa,wb,sw,bow){const a=P(wa),b=P(wb);const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2-(bow||0);const d=`M${f(a[0])},${f(a[1])} Q${f(mx)},${f(my)} ${f(b[0])},${f(b[1])}`;
+    push(`<path d="${d}" fill="none" stroke="${accent}" stroke-width="${f((sw||1.6)*lw*2.6)}" stroke-opacity="0.16"/>`);
+    push(`<path d="${d}" fill="none" stroke="${accent}" stroke-width="${f((sw||1.6)*lw)}" stroke-opacity="0.95"/>`);return [mx,my];}
+  // project a world-space ellipse (circle radius r in XY plane at height z)
+  function orbit(cx,cy,z,r,ry,st,op,sw,dash){ry=ry==null?r:ry;let d='';for(let k=0;k<=72;k++){const t=k/72*6.283;const p=P([cx+Math.cos(t)*r,cy+Math.sin(t)*ry,z]);d+=(k?'L':'M')+f(p[0])+','+f(p[1]);}push(`<path d="${d}" fill="none" stroke="${st}" stroke-width="${f((sw||0.8)*lw)}" stroke-opacity="${op==null?0.4:op}"${dash?` stroke-dasharray="${dash}"`:''}/>`);}
+  // ---- screen-space glyphs, anchored at a projected world point ----
+  function g_padlock(w,s,col){const c=P(w);s=s||10;col=col||accent;push(`<rect x="${f(c[0]-s*0.7)}" y="${f(c[1]-s*0.2)}" width="${f(s*1.4)}" height="${f(s*1.15)}" rx="${f(s*0.16)}" fill="${col}" fill-opacity="0.9"/><path d="M${f(c[0]-s*0.42)},${f(c[1]-s*0.2)} v${f(-s*0.5)} a${f(s*0.42)},${f(s*0.42)} 0 0 1 ${f(s*0.84)},0 v${f(s*0.5)}" fill="none" stroke="${col}" stroke-width="${f(1.8*lw)}"/><circle cx="${f(c[0])}" cy="${f(c[1]+s*0.35)}" r="${f(s*0.16)}" fill="var(--bg)"/>`);}
+  function g_cross(w,s,col){const c=P(w);s=s||9;col=col||'var(--struck)';push(`<path d="M${f(c[0]-s)},${f(c[1]-s)} L${f(c[0]+s)},${f(c[1]+s)} M${f(c[0]+s)},${f(c[1]-s)} L${f(c[0]-s)},${f(c[1]+s)}" stroke="${col}" stroke-width="${f(2.2*lw)}" stroke-linecap="round"/>`);}
+  function g_check(w,s,col){const c=P(w);s=s||9;col=col||'#74C476';push(`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="${f(s)}" fill="none" stroke="${col}" stroke-width="${f(1.5*lw)}"/><path d="M${f(c[0]-s*0.42)},${f(c[1])} l${f(s*0.34)},${f(s*0.4)} l${f(s*0.6)},${f(-s*0.8)}" fill="none" stroke="${col}" stroke-width="${f(1.8*lw)}" stroke-linecap="round" stroke-linejoin="round"/>`);}
+  function g_flag(w,h,col){const c=P(w);h=h||34;col=col||accent;push(`<line x1="${f(c[0])}" y1="${f(c[1])}" x2="${f(c[0])}" y2="${f(c[1]-h)}" stroke="var(--edge)" stroke-width="${f(1.6*lw)}"/><path d="M${f(c[0])},${f(c[1]-h)} l${f(h*0.62)},${f(h*0.16)} l${f(-h*0.62)},${f(h*0.32)} z" fill="${col}"/><circle cx="${f(c[0])}" cy="${f(c[1])}" r="2.4" fill="${col}"/>`);}
+  function g_star(w,s,col,op){const c=P(w);s=s||10;col=col||'var(--edge)';let pts='';for(let i=0;i<10;i++){const an=-Math.PI/2+i*Math.PI/5;const rr=i%2?s*0.42:s;pts+=`${f(c[0]+Math.cos(an)*rr)},${f(c[1]+Math.sin(an)*rr)} `;}push(`<polygon points="${pts}" fill="${col}" fill-opacity="${op==null?1:op}"/>`);}
+  function g_person(w,h,col){const c=P(w);h=h||30;col=col||accent;push(`<circle cx="${f(c[0])}" cy="${f(c[1]-h*0.78)}" r="${f(h*0.2)}" fill="${col}"/><path d="M${f(c[0]-h*0.28)},${f(c[1])} q${f(h*0.28)},${f(-h*0.62)} ${f(h*0.56)},0 z" fill="${col}"/>`);}
+  // ---- labels ----
+  function tx(x,y,t,size,fill,anchor){return `<text x="${f(x)}" y="${f(y)}" font-family="var(--mono)" font-size="${f(size*ts)}" letter-spacing="0.12em" fill="${fill}"${anchor?` text-anchor="${anchor}"`:''}>${t}</text>`;}
+  function leader(w,dx,dy,num,title,sub,anchor){if(!labels)return;const c=P(w);const x=c[0]+dx*ld,y=c[1]+dy*ld;
+    push(`<line x1="${f(c[0])}" y1="${f(c[1])}" x2="${f(x-(dx<0?-6:6))}" y2="${f(y)}" stroke="var(--edge)" stroke-width="${f(0.9*lw)}" stroke-opacity="0.45"/><circle cx="${f(c[0])}" cy="${f(c[1])}" r="2.2" fill="${accent}"/>`);
+    const a=anchor||(dx<0?'end':'start');
+    push(tx(x,y-3,(num?num+' · ':'')+title,13.5,'var(--edge)',a));
+    if(sub)push(tx(x,y+12*lg,sub,9.5,'var(--muted)',a));}
+  function header(){if(!labels)return;push(tx(46,64,'YASP MANIFESTO',12,'var(--muted)'));push(tx(46,90,'FIG. '+SCENE_NO[scene]+' — '+SCENE_NAME[scene],15,'var(--edge)'));push(`<line x1="46" y1="104" x2="${46+Math.min(560,SCENE_NAME[scene].length*11)}" y2="104" stroke="var(--edge)" stroke-width="1" stroke-opacity="0.35"/>`);}
+  function footer(sub){if(!labels)return;if(sub)push(tx(46,Ht-52,sub,13,'var(--edge)'));push(tx(46,Ht-30,'FOR THE BUILDERS .ai',9.5,'var(--muted)'));}
+
+  // ================= VISUALS =================
+  const S={};
+
+  // 01 — THE DOOR LOCKED: one walled ecosystem, a single gate locked behind; workloads flow in, none out; deploy > train.
+  S.door=()=>{
+    fit([[-1.75,-1.85,0],[1.55,1.6,0],[1.7,-0.75,0.95],[1.4,1.4,1.05]]);
+    // the open plain (faint, once-free ground)
+    gridPlane(0,-1.75,1.75,-1.85,1.75,12,12,0.12);
+    const wx0=-1.1,wx1=1.1,wy0=-1.1,wy1=1.1,wh=0.62,base=[26,28,36];
+    // glass floor of the enclosure (subtle, so the silicon reads on top)
+    planeXY(0.005,wx0,wx1,wy0,wy1,true);
+    gridPlane(0.008,wx0,wx1,wy0,wy1,8,8,0.18);
+    // thin GLASS enclosure (gate = gap in the front wall, near y0)
+    const gate0=-0.3,gate1=0.3;
+    // far + side glass walls first (so the silicon inside reads through the near glass)
+    glassPanel(wx0,wy1,wx1,wy1,0,wh,0.05,6,3);   // back wall
+    glassPanel(wx0,wy0,wx0,wy1,0,wh,0.05,5,3);   // left wall
+    glassPanel(wx1,wy0,wx1,wy1,0,wh,0.05,5,3);   // right wall
+    // the reachable silicon INSIDE — a field of dies on the floor, seen through the glass
+    const dxs=[-0.62,0,0.62],dys=[0.7,0.12,-0.46];
+    for(let r=0;r<3;r++)for(let c=0;c<3;c++){const lit=(r+c)%4===1;
+      dieRich([dxs[c],dys[r],0.02],0.15,0.035,{g:3,shift:c*18-r*10});
+      if(lit){const q=P([dxs[c],dys[r],0.075]);push(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="2.4" fill="${accent}"/>`);}}
+    // near (front) glass walls, drawn over the silicon — translucent, so dies show through
+    glassPanel(wx0,wy0,gate0,wy0,0,wh,0.05,3,3);
+    glassPanel(gate1,wy0,wx1,wy0,0,wh,0.05,3,3);
+    // slim door frame (thin jambs) + closed GLASS door — FULL wall height, lit top edge flush with the wall
+    seg([gate0,wy0,0],[gate0,wy0,wh],'var(--edge)',1.4,0.7);
+    seg([gate1,wy0,0],[gate1,wy0,wh],'var(--edge)',1.4,0.7);
+    seg([gate0,wy0,wh],[gate1,wy0,wh],accent,1.5,0.7);
+    glassPanel(gate0,wy0,gate1,wy0,0,wh,0.08,3,3); // the closed glass door
+    // everyone already moved in — a faint PAST trace ending at the now-closed door (no active entry)
+    cloud([-0.05,-1.7,0.05],36,26,'var(--muted)');
+    {const a=P([0,-1.68,0.12]),b=P([0,wy0-0.03,wh*0.3]);const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2-16;
+     push(`<path d="M${f(a[0])},${f(a[1])} Q${f(mx)},${f(my)} ${f(b[0])},${f(b[1])}" fill="none" stroke="var(--muted)" stroke-width="${f(1.1*lw)}" stroke-opacity="0.45" stroke-dasharray="6 6"/>`);}
+    // exit — not provided (struck dashed arrow off the back)
+    seg([0,wy1+0.02,wh*0.55],[0,1.8,wh*0.55],'var(--struck)',1.2,0.5,'6 6');
+    g_cross([0,1.5,wh*0.7],11,'var(--struck)');
+    // DEPLOY > TRAIN — two bars front-right on the plain
+    const bx=1.18;box3W(bx,bx+0.17,-0.75,-0.55,0,0.26,[40,44,56]);            // TRAIN (short)
+    box3W(bx+0.32,bx+0.49,-0.75,-0.55,0,0.9,base,accent);                     // DEPLOY (tall, accent top)
+    if(labels){push(tx(P([bx+0.085,-0.65,0.26])[0],P([bx+0.085,-0.65,0.26])[1]-8,'TRAIN',9.5,'var(--muted)','middle'));push(tx(P([bx+0.405,-0.65,0.9])[0],P([bx+0.405,-0.65,0.9])[1]-8,'DEPLOY',9.5,'var(--edge)','middle'));}
+    // callouts
+    leader([-1.4,-1.5,0.0],-20,-30,'1','THE OPEN PLAIN','HARDWARE PICKED FOR THE JOB');
+    leader([wx0+0.4,wy1-0.3,wh],-10,-64,'2','ONE ECOSYSTEM, WALLED','EVERYONE MOVED IN — THE DOOR LOCKED');
+    leader([bx+0.26,-0.6,0.9],40,-52,'3','DEPLOY > TRAIN','MORE TIME SHIPPING THAN TRAINING','start');
+    header();footer('AND EVERYONE PRETENDS THIS IS NORMAL. WE DON’T.');
+  };
+
+  // 02 — THE DECISION: two parallel paths, same start + same unit, so length reads as time. Old = long, crossed out. New = one decision.
+  S.decision=()=>{
+    const startX=-1.7, step=0.235, nOld=13, oyc=0.46, nyc=-0.46;
+    const oEnd=startX+(nOld-1)*step+0.17;
+    const px0=-1.9,px1=oEnd+0.3,py0=-0.72,py1=0.72;
+    fit([[px0,py0,0],[px1,py1,0],[startX,nyc,0.3],[oEnd,oyc,0.05]]);
+    planeXY(0,px0,px1,py0,py1,true);
+    gridPlane(0.004,px0,px1,py0,py1,12,5,0.12);
+    function measure(x0,x1,y,txt,col){seg([x0,y,0.02],[x1,y,0.02],'var(--muted)',0.9,0.45);seg([x0,y-0.04,0.02],[x0,y+0.04,0.02],'var(--muted)',0.9,0.45);seg([x1,y-0.04,0.02],[x1,y+0.04,0.02],'var(--muted)',0.9,0.45);if(labels){const mp=P([(x0+x1)/2,y,0.02]);push(tx(mp[0],mp[1]+14,txt,9.5,col||'var(--muted)','middle'));}}
+    // shared START — both paths begin at the same line (makes the length comparison honest)
+    seg([startX-0.06,nyc-0.1,0.02],[startX-0.06,oyc+0.1,0.02],'var(--edge)',1,0.5,'3 4');
+
+    // ===== OLD TOOLCHAIN (back lane) — a long chain of stages, crossed out =====
+    const oh=0.26;
+    for(let i=0;i<nOld-1;i++){const x=startX+i*step;seg([x+0.17,oyc,0.045],[x+step,oyc,0.045],'var(--muted)',0.7,0.35);}
+    const oxs=[];for(let i=0;i<nOld;i++)oxs.push(startX+i*step);
+    oxs.sort((a,b)=>P([b+0.085,oyc,0.02])[2]-P([a+0.085,oyc,0.02])[2]);
+    for(const x of oxs)box3W(x,x+0.17,oyc-oh/2,oyc+oh/2,0,0.04,[26,28,35]);
+    seg([startX-0.02,oyc,0.1],[oEnd+0.02,oyc,0.1],'var(--struck)',1.8,0.8); // one clean strike — crossed out
+    measure(startX,oEnd,oyc-oh/2-0.12,'≈ FOUR MONTHS');
+
+    // ===== NEW PATH (front lane) — five targets → one decision → shipped =====
+    const cxs=[]; for(let i=0;i<5;i++)cxs.push(startX+0.06+i*0.16); const chosen=2; const shipX=startX+1.1,nEnd=shipX+0.2;
+    for(let i=0;i<5;i++)for(let k=0;k<2;k++){const h=0.03+0.02*((i+k)%2);seg([cxs[i]-0.03+k*0.05,nyc-0.19,0.02],[cxs[i]-0.03+k*0.05,nyc-0.19,0.02+h],'var(--mesh)',0.9,0.4);}
+    for(let i=0;i<5;i++){if(i===chosen)continue;dieRich([cxs[i],nyc,0.0],0.064,0.02,{g:3,shift:i*14});}
+    seg([cxs[chosen],nyc,0.28],[cxs[chosen],nyc,0.09],accent,1.3,0.7,'4 5'); // short decision beam
+    dieRich([cxs[chosen],nyc,0.045],0.078,0.03,{g:3});
+    ring2([cxs[chosen],nyc,0.09],12,accent,0.9,1.3);
+    ring2([shipX,nyc,0.02],24,accent,0.35,3); // arrival underglow
+    dieRich([shipX,nyc,0.02],0.15,0.05,{g:4});
+    g_check([shipX+0.2,nyc,0.09],10,'#74C476');
+    measure(startX,nEnd,nyc-0.22,'ONE DECISION · ONE DAY','var(--edge)');
+
+    leader([cxs[1],nyc,0.05],4,-48,'1','FIVE TARGETS, DRAWN EQUAL','READ THE SPEC · COMPARE THE PRICE','start');
+    leader([shipX,nyc,0.08],54,40,'2','THE CHOSEN ONE — SHIPPED','RIGHT FOR THE JOB, NOT THE DEFAULT','start');
+    leader([oEnd-0.3,oyc,0.05],40,-58,'3','THE OLD TOOLCHAIN','FOUR MONTHS — CROSSED OUT','start');
+    header();footer('IT USED TO TAKE MONTHS. TODAY IT TAKES A DECISION.');
+  };
+
+  // 03 — RESULTS BY THURSDAY: the week built as terraced terrain; a flag on Thursday; a fresh chip; a short drawn path.
+  S.thursday=()=>{
+    fit([[-2.0,-1.0,0],[2.2,1.2,0],[0,0,1.1]]);
+    const days=['MON','TUE','WED','THU','FRI'];const flag=3;
+    // each day = a terrace block, rising toward mid-week then the flag
+    const heights=[0.16,0.30,0.46,0.62,0.5];const tx0=-1.7,tw=0.62,ty0=-0.5,ty1=0.5;
+    for(let i=0;i<5;i++){const x0=tx0+i*tw,x1=x0+tw*0.9;const emph=(i===flag);
+      box3W(x0,x1,ty0,ty1,0,heights[i],emph?[36,40,64]:[30,32,40],emph?accent:null);
+      // contour lines on each terrace top
+      const zt=heights[i];for(let k=1;k<4;k++){seg([x0,ty0+(ty1-ty0)*k/4,zt+0.002],[x1,ty0+(ty1-ty0)*k/4,zt+0.002],'var(--edge)',0.5,0.25);}
+      // day label on the front face of each terrace
+      if(labels)push(tx(P([(x0+x1)/2,ty0-0.06,heights[i]*0.5])[0],P([(x0+x1)/2,ty0-0.06,heights[i]*0.5])[1],days[i],10.5,emph?'var(--edge)':'var(--muted)','middle'));}
+    // fresh chip seated on TUESDAY's terrace (six months young)
+    const chipDay=1, chipX=tx0+chipDay*tw+tw*0.45;
+    dieRich([chipX,0.05,heights[chipDay]+0.02],0.16,0.04,{g:3});
+    // short path climbing from the chip to Thursday's flag — bright, with day nodes
+    let prev=[chipX,0.05,heights[chipDay]+0.07];
+    for(let i=chipDay+1;i<=flag;i++){const x=tx0+i*tw+tw*0.45;const p=[x,0.05,heights[i]+0.07];glowRoute(prev,p,1.8,22);const q=P(prev);push(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="3" fill="${accent}"/>`);prev=p;}
+    {const q=P(prev);push(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="3.4" fill="${accent}"/>`);}
+    g_flag([tx0+flag*tw+tw*0.45,0.05,heights[flag]+0.06],42,accent);
+    leader([chipX,0,heights[chipDay]+0.04],-36,-34,'1','A CHIP 6 MONTHS OLD','IT DIDN’T EXIST LAST HALF-YEAR');
+    leader([tx0+flag*tw+tw*0.45,0,heights[flag]+0.44],40,-20,'2','THURSDAY','THE PATH IS SHORT, ALREADY DRAWN');
+    header();footer('SHE’S NOT WORRIED. SHE’LL HAVE RESULTS BY THURSDAY.');
+  };
+
+  // 04 — THE PRODUCT IS THE PITCH: an exploded slide stack; the "infrastructure constraints" module withdrawn; product lit.
+  S.pitch=()=>{
+    fit([[-2.15,-0.7,-0.1],[1.05,0.7,1.55],[0,0,-0.1]]);
+    const hx=0.72,hy=0.5,h=0.07,prodZ=0.9;
+    // THE PRODUCT stays solid + vivid (the focus); every other slide DEMATERIALIZES — dissolving into drifting particles, more so the farther from the product
+    const slides=[{t:'THE ASK',z:0.0,kind:'ask'},{t:'THE TEAM',z:0.3,kind:'team'},{t:'THE MARKET',z:0.6,kind:'market'},{t:'THE PRODUCT',z:prodZ,kind:'product'},{t:'THE PROBLEM',z:1.2,kind:'problem'}];
+    function dematSlab(z,dist){const zt=z+h,fade=Math.max(0.1,0.44-dist*0.12);
+      const c=[[-hx,-hy],[hx,-hy],[hx,hy],[-hx,hy]];let e='';
+      for(let k=0;k<4;k++){const a=c[k],b=c[(k+1)%4];e+=LINE(P([a[0],a[1],zt]),P([b[0],b[1],zt]),'var(--edge)',0.7,fade,'5 7');}
+      for(const cc of c)e+=LINE(P([cc[0],cc[1],z]),P([cc[0],cc[1],zt]),'var(--edge)',0.6,fade*0.55,'5 7');
+      push(e);
+      const rr=mulberry32(seed*90+Math.round(z*100)+7),N=Math.round(90/(1+dist*1.15));let s='';
+      for(let i=0;i<N;i++){const u=-hx+2*hx*rr(),v=-hy+2*hy*rr(),rise=rr()*0.14*dist;const q=P([u,v,zt+rise]);
+        const op=Math.max(0.05,(0.6-rr()*0.42)*fade*1.7);s+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${rr()<0.18?1.4:0.85}" fill="var(--dot)" fill-opacity="${f(op)}"/>`;}
+      push(s);}
+    for(const sl of slides){slab3D(0,hx,hy,sl.z,h,sl.kind);
+      leader([hx,-hy*0.4,sl.z+h],44,0,'',sl.t,null,'start');}
+    // the withdrawn module: INFRASTRUCTURE CONSTRAINTS — ghost, pulled out from the MARKET level, dashed removal arrow
+    const gz=0.6,gpx=-1.3;box3ghost(-hx+gpx,hx+gpx,-hy,hy,gz,h,'var(--struck)');
+    seg([-hx-0.1,0,gz+0.03],[-hx+gpx+0.72,0,gz+0.03],'var(--struck)',1.3,0.6,'6 6');
+    const ar=P([-hx+gpx+0.72,0,gz+0.03]);push(`<path d="M${f(ar[0]+9)},${f(ar[1]-6)} L${f(ar[0])},${f(ar[1])} L${f(ar[0]+9)},${f(ar[1]+6)}" fill="none" stroke="var(--struck)" stroke-width="${f(1.8*lw)}"/>`);
+    g_cross([gpx,0,gz+0.22],10,'var(--struck)');
+    leader([gpx,0,gz+0.05],-34,-34,'1','INFRASTRUCTURE CONSTRAINTS','WITHDRAWN — NO LONGER LOAD-BEARING','end');
+    leader([hx*0.5,-hy,0.9+h],62,96,'2','THE PRODUCT','THE ONLY MOVING PART LEFT','start');
+    header();footer('HE USED TO HAVE THAT SLIDE. HE DOESN’T NEED IT ANYMORE.');
+  };
+
+  // 05 — NOTHING STOOD IN THE WAY: a software span to a first-time edge device; cloud relay struck; no towers.
+  S.span=()=>{
+    fit([[-2.3,-0.8,-0.5],[2.3,0.8,0.5],[0,0,1.4],[0,0,-0.6]]);
+    // origin plateau (left): the trained model
+    box3W(-2.15,-1.25,-0.4,0.4,-0.2,0.2,[28,30,38]);
+    cloud([-1.7,0,0.15],40,44,'var(--dot)');
+    node([-1.7,0,0.05],3,accent);
+    // the chasm (dark gap) — implied by nothing between
+    // edge device (right): a small board on a pillar, never ran a model
+    box3W(1.35,1.7,-0.18,0.18,-0.6,0.62,[24,26,32]);          // pillar
+    dieRich([1.525,0,0.06],0.2,0.05,{g:3});                    // the device lights up
+    ring2([1.525,0,0.11],20,accent,0.8,1.3);
+    // the span — software arc, self-supporting, no towers
+    glowRoute([-1.55,0,0.2],[1.525,0,0.14],1.8,120);
+    // phantom towers (not needed) — dashed verticals under the arc
+    seg([-0.4,0,-0.5],[-0.4,0,0.55],'var(--struck)',1,0.3,'5 6');
+    seg([0.5,0,-0.5],[0.5,0,0.6],'var(--struck)',1,0.3,'5 6');
+    // cloud relay, struck — physics said no
+    cloud([0,0,1.25],44,40,'var(--muted)');
+    seg([-1.4,0,0.35],[-0.5,0,1.05],'var(--struck)',1.1,0.35,'4 5');
+    seg([1.3,0,0.28],[0.5,0,1.05],'var(--struck)',1.1,0.35,'4 5');
+    g_cross([0,0,1.25],13,'var(--struck)');
+    leader([-1.7,0,0.2],-30,-30,'1','THE MODEL, TRAINED','WAITING TO RUN');
+    leader([0,0,1.15],40,-30,'2','CLOUD RELAY — STRUCK','LATENCY ISN’T INCONVENIENT, IT’S IMPOSSIBLE');
+    leader([1.525,0,0.16],52,54,'3','EDGE DEVICE — FIRST RUN','CHOSEN BECAUSE IT FIT THE PROBLEM');
+    header();footer('THE MODEL RUNS BECAUSE NOTHING STOOD IN THE WAY.');
+  };
+
+  // 06 — KEY VISUAL: a monument of unified silicon; the builder stands atop and plants the flag; vendor's false claim struck aside.
+  function buildersScene(top){
+    const hx=0.68,hy=0.68,h=0.055, zMo=0.0,zYa=0.52*spread,zCh=1.04*spread; // square layers; spread = layer spacing
+    fit([[-1.02,-0.74,-0.05],[1.08,0.74,Math.max(1.4,zCh+0.16)],[0,0,-0.05]]);
+    const rrb=mulberry32(seed*5+1);
+    const gnodes=(z,col)=>{for(const c of [[-hx,-hy],[hx,-hy],[hx,hy],[-hx,hy]]){const q=P([c[0],c[1],z]);push(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="2.4" fill="none" stroke="${col||'var(--edge)'}" stroke-width="0.9" stroke-opacity="0.6"/>`);}};
+    function glassSlab(z,tintOp,lit){const zt=z+h,c=[[-hx,-hy],[hx,-hy],[hx,hy],[-hx,hy]];
+      push(polyW([[-hx,-hy,zt],[hx,-hy,zt],[hx,hy,zt],[-hx,hy,zt]],'var(--mesh)',tintOp==null?0.05:tintOp));
+      for(const cc of c)push(LINE(P([cc[0],cc[1],z]),P([cc[0],cc[1],zt]),'var(--edge)',0.7,0.3));
+      for(let k=0;k<4;k++)push(LINE(P([c[k][0],c[k][1],z]),P([c[(k+1)%4][0],c[(k+1)%4][1],z]),'var(--edge)',0.6,0.22));
+      for(let k=0;k<4;k++)push(LINE(P([c[k][0],c[k][1],zt]),P([c[(k+1)%4][0],c[(k+1)%4][1],zt]),lit?accent:'var(--edge)',lit?1.5:1,lit?0.9:0.55));
+      return zt;}
+    const gx=u=>-hx+2*hx*u, gy=v=>-hy+2*hy*v;
+    // BOTTOM · MODEL (glass) — points + needle-models
+    {const zt=glassSlab(zMo,0.04,false);
+     for(let k=0;k<66;k++){const q=P([gx(0.06+0.88*rrb()),gy(0.08+0.84*rrb()),zt+0.002]);push(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${rrb()<0.12?1.3:0.7}" fill="var(--dot)" fill-opacity="${f(0.16+0.4*rrb())}"/>`);}
+     for(let k=0;k<24;k++){const u=gx(0.1+0.8*rrb()),v=gy(0.12+0.76*rrb()),nh=0.05+rrb()*0.12,hot=rrb()<0.16;const b=P([u,v,zt+0.002]),tp=P([u,v,zt+0.002+nh]);push(LINE(b,tp,hot?accent:'var(--mesh)',hot?1.1:0.6,hot?0.85:0.4));push(`<circle cx="${f(tp[0])}" cy="${f(tp[1])}" r="${hot?1.7:1}" fill="${hot?accent:'var(--dot)'}" fill-opacity="${hot?1:0.5}"/>`);}
+     leader([hx,-hy*0.5,zt],44,8,'','THE MODEL','ANY PYTORCH · NEEDLES = MODELS','start');}
+    // MIDDLE · yasp (glass, HERO) — see-through woven grid + Kronos/Gaia
+    {const zt=glassSlab(zYa,0.05,true);
+     push(polyW([[-hx,-hy,zt],[0,-hy,zt],[0,hy,zt],[-hx,hy,zt]],hsl2hex(196,60,52),0.1));
+     push(polyW([[0,-hy,zt],[hx,-hy,zt],[hx,hy,zt],[0,hy,zt]],hsl2hex(272,55,58),0.1));
+     for(let i=1;i<12;i++){const u=gx(i/12);push(LINE(P([u,-hy,zt]),P([u,hy,zt]),accent,0.5,0.32));}
+     for(let j=1;j<8;j++){const v=gy(j/8);push(LINE(P([-hx,v,zt]),P([hx,v,zt]),accent,0.5,0.32));}
+     if(labels){push(tx(P([-hx*0.5,-hy*0.55,zt+0.002])[0],P([-hx*0.5,-hy*0.55,zt+0.002])[1],'KRONOS',7.5,'var(--edge)','middle'));push(tx(P([hx*0.5,-hy*0.55,zt+0.002])[0],P([hx*0.5,-hy*0.55,zt+0.002])[1],'GAIA',7.5,'var(--edge)','middle'));}
+     leader([hx,-hy*0.5,zt],44,8,'','yasp — KRONOS + GAIA','SEE-THROUGH LAYER · BREAKS THE BARRIER','start');}
+    // TOP · THE HARDWARE — six dies (alt) OR silicon wafer (default)
+    {const zt=glassSlab(zCh,0.05,false);
+     if(top==='dies'){
+       const chips=[{x:-0.42,y:0.22,sh:0},{x:0,y:0.22,sh:20},{x:0.42,y:0.22,sh:36},{x:-0.42,y:-0.22,sh:-14},{x:0,y:-0.22,sh:52},{x:0.42,y:-0.22,sh:-28}];
+       chips.slice().sort((a,b)=>b.y-a.y||a.x-b.x).forEach(c=>{dieRich([c.x,c.y,zt],0.13,0.045,{g:6,cell:0.9,sat:54,lit:48,inner:true,shift:c.sh});});
+       leader([hx,-hy*0.5,zt],44,8,'','THE HARDWARE','SIX TARGETS · REACHED','start');
+     } else {
+     const RR=0.6, rrw=mulberry32(seed*17+3);
+     const insC=(x,y,m)=>(x*x+y*y)<=(RR-m)*(RR-m); // true round wafer
+     for(let x=-RR+0.1;x<RR;x+=0.1){const yy=Math.sqrt(Math.max(0,RR*RR-x*x));push(LINE(P([x,-yy,zt+0.001]),P([x,yy,zt+0.001]),'var(--edge)',0.5,0.26));}
+     for(let y=-RR+0.1;y<RR;y+=0.1){const xx=Math.sqrt(Math.max(0,RR*RR-y*y));push(LINE(P([-xx,y,zt+0.001]),P([xx,y,zt+0.001]),'var(--edge)',0.5,0.26));}
+     let d='';for(let k=0;k<=100;k++){const a=k/100*6.283,p=P([Math.cos(a)*RR,Math.sin(a)*RR,zt+0.002]);d+=(k?'L':'M')+f(p[0])+','+f(p[1]);}push(`<path d="${d}" fill="none" stroke="var(--edge)" stroke-width="${f(1.3*lw)}" stroke-opacity="0.75"/>`);
+     for(let x=-RR+0.2;x<RR;x+=0.2)for(let y=-RR+0.2;y<RR;y+=0.2){if(!insC(x,y,0.07))continue;const c=P([x,y,zt+0.003]);push(`<path d="M${f(c[0]-5)},${f(c[1]-4)} l10,8 M${f(c[0]+5)},${f(c[1]-4)} l-10,8" stroke="var(--muted)" stroke-width="0.8" stroke-opacity="0.45"/>`);}
+     // kernels — kept fully inside the wafer (margin > half-cell)
+     const ks=0.03;for(let k=0;k<26;k++){let x,y,ok=false,tr=0;do{x=(rrw()*2-1)*RR;y=(rrw()*2-1)*RR;ok=insC(x,y,0.06);tr++;}while(!ok&&tr<12);if(!ok)continue;const q=[P([x-ks,y-ks,zt+0.004]),P([x+ks,y-ks,zt+0.004]),P([x+ks,y+ks,zt+0.004]),P([x-ks,y+ks,zt+0.004])];push(`<polygon points="${q.map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="${accent}" fill-opacity="0.9"/>`);}
+     leader([RR,-RR*0.4,zt],44,8,'','THE HARDWARE','ONE WAFER · EVERY DIE · KERNELS VALIDATED','start');}}
+    seg([0,0,zMo+h],[0,0,zCh],accent,1,0.22);
+    header();footer('HARDWARE BELONGS TO THE BUILDERS. IT ALWAYS DID.');
+  }
+  S.builders=()=>buildersScene('wafer');
+  S.builders2=()=>buildersScene('dies');
+
+  // 04B — THE PITCH: a founder pitches a big PRODUCT screen; the infrastructure-constraints slide is withdrawn
+  S.pitch2=()=>{
+    fit([[-1.9,-1.05,0],[1.45,0.65,0],[0,0.5,1.28],[0,-0.66,0.2]]);
+    gridPlane(0,-1.75,1.4,-1.05,0.66,15,8,0.1);
+    const ys=0.5,sw=0.95,z0=0.18,z1=1.2;
+    // ---- THE PRODUCT SCREEN (the pitch) ----
+    push(polyW([[-sw,ys,z0],[sw,ys,z0],[sw,ys,z1],[-sw,ys,z1]],'#0f1120',1));
+    const GR=6;for(let j=0;j<GR;j++){const v0=z0+(z1-z0)*(j+0.1)/GR,v1=z0+(z1-z0)*(j+0.9)/GR;push(polyW([[-sw*0.92,ys-0.004,v0],[sw*0.92,ys-0.004,v0],[sw*0.92,ys-0.004,v1],[-sw*0.92,ys-0.004,v1]],hsl2hex(214+j*11,66,46+j*3),0.97));}
+    for(let i=0;i<=8;i++){const x=-sw*0.92+2*sw*0.92*i/8;push(LINE(P([x,ys-0.006,z0]),P([x,ys-0.006,z1]),'var(--edge)',0.4,0.14));}
+    {const c=[P([-sw,ys,z0]),P([sw,ys,z0]),P([sw,ys,z1]),P([-sw,ys,z1])];let fr='';for(let k=0;k<4;k++)fr+=LINE(c[k],c[(k+1)%4],accent,1.6,0.9);push(fr);}
+    push(LINE(P([0,ys,z0]),P([0,ys,0]),'var(--edge)',1.2,0.5));
+    push(polyW([[-0.2,ys-0.06,0.002],[0.2,ys-0.06,0.002],[0.2,ys+0.06,0.002],[-0.2,ys+0.06,0.002]],'var(--edge)',0.22));
+    leader([0,ys,z1+0.02],0,-30,'','THE PRODUCT','THE PITCH — THE ONLY SLIDE HE NEEDS','middle');
+    // ---- founder at a podium, presenting ----
+    box3W(-0.11,0.11,-0.66,-0.46,0,0.2,[30,32,40]);
+    g_person([0,-0.56,0.2],46,accent);
+    glowRoute([0,-0.56,0.34],[0,ys-0.02,(z0+z1)/2],1.3,34);
+    leader([0,-0.56,0.14],-70,10,'','THE FOUNDER','PITCHING — PRODUCT-FIRST','end');
+    // investors
+    for(let k=0;k<5;k++){const x=-0.62+k*0.31;const q=P([x,-0.98,0.02]);push(`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="2.6" fill="var(--dot)" fill-opacity="0.5"/>`);}
+    // ---- the INFRASTRUCTURE CONSTRAINTS slide — withdrawn, dissolving ----
+    const vx=-1.52,vy=0.12,vz0=0.42,vz1=0.86,vw=0.3;
+    {const c=[[vx-vw,vz0],[vx+vw,vz0],[vx+vw,vz1],[vx-vw,vz1]];let e='';for(let k=0;k<4;k++){const a=c[k],b=c[(k+1)%4];e+=LINE(P([a[0],vy,a[1]]),P([b[0],vy,b[1]]),'var(--struck)',0.8,0.4,'5 6');}push(e);
+     const rr=mulberry32(seed*41+2);let s='';for(let i=0;i<44;i++){const x=vx-vw+2*vw*rr(),z=vz0+(vz1-vz0)*rr(),rise=rr()*0.32;const q=P([x-rise*0.5,vy,z+rise]);s+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${rr()<0.2?1.2:0.7}" fill="var(--muted)" fill-opacity="${f(Math.max(0.04,0.4-rr()*0.32))}"/>`;}push(s);
+     g_cross([vx,vy,(vz0+vz1)/2],11,'var(--struck)');}
+    leader([vx,vy,vz1],0,-36,'','INFRASTRUCTURE CONSTRAINTS','WITHDRAWN — HE DOESN’T NEED IT ANYMORE','middle');
+    header();footer('THE PRODUCT IS THE PITCH NOW.');
+  };
+
+  (S[scene]||S.door)();
+  return `<svg id="art" width="${LW}" height="${Ht}" viewBox="0 0 ${LW} ${Ht}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+}
+(typeof window!=='undefined'?window:globalThis).MF={build,SCENE_LIST,SCENE_NAME,SCENE_NO};
+</script>
+<script>
+const $=id=>document.getElementById(id),stage=$('stage');
+function render(){try{stage.innerHTML=MF.build({scene:$('scene').value,seed:parseInt($('seed').value,10)||0,accent:$('accent').value,az:parseInt($('az').value,10),el:parseInt($('el').value,10),lineWeight:parseFloat($('lw').value),textScale:parseFloat($('ts').value),zoom:parseFloat($('zoom').value),labelGap:parseFloat($('lg').value),labelDist:parseFloat($('ld').value),spread:parseFloat($('spread').value),labels:$('labels').checked});}catch(e){stage.innerHTML='<div style="color:#C98A4B;font-family:monospace;font-size:13px;max-width:640px;padding:20px;line-height:1.6">Render error: '+(e&&e.message||e)+'</div>';}}
+const DEF={door:[28,20],decision:[24,30],thursday:[24,18],pitch:[30,31],pitch2:[16,15],span:[20,16],builders:[28,26],builders2:[28,26]};
+$('scene').addEventListener('change',()=>{const d=DEF[$('scene').value];if(d){$('az').value=d[0];$('el').value=d[1];}render();});
+$('rnd').onclick=()=>{$('seed').value=Math.floor(Math.random()*99999);render();};
+['seed','accent','az','el','lw','ts','zoom','lg','ld','spread','labels'].forEach(id=>{$(id).addEventListener('input',render);$(id).addEventListener('change',render);});
+function resolvedSVG(){const src=$('art');if(!src)return'';const clone=src.cloneNode(true),cs=getComputedStyle(document.documentElement);const map={'--bg':'','--edge':'','--mesh':'','--dot':'','--muted':'','--panel':'','--panel2':'','--struck':'','--mono':''};for(const k in map)map[k]=cs.getPropertyValue(k).trim()||'#000';map['--mono']=(map['--mono']||'monospace').split('"').join('');let s=new XMLSerializer().serializeToString(clone);for(const k in map)s=s.split('var('+k+')').join(map[k]);return s;}
+function dl(n,b){try{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),800);}catch(e){}}
+const fn=()=>'yasp-manifesto-'+$('scene').value+'-'+$('seed').value;
+$('svg').onclick=()=>dl(fn()+'.svg',new Blob([resolvedSVG()],{type:'image/svg+xml'}));
+$('png').onclick=()=>{const svg=resolvedSVG(),sc=2,img=new Image(),url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));img.onload=()=>{const vb=($('art').getAttribute('viewBox')||'0 0 1480 1040').split(' ');const VW=parseFloat(vb[2]),VH=parseFloat(vb[3]);const c=document.createElement('canvas');c.width=VW*sc;c.height=VH*sc;const x=c.getContext('2d');x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0B0C0E';x.fillRect(0,0,c.width,c.height);x.scale(sc,sc);x.drawImage(img,0,0,VW,VH);URL.revokeObjectURL(url);c.toBlob(b=>dl(fn()+'.png',b),'image/png');};img.src=url;};
+function copySVG(){const s=resolvedSVG();if(!s)return;let w=document.getElementById('__cw');if(!w){w=document.createElement('div');w.id='__cw';w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px;font-family:monospace';const box=document.createElement('div');box.style.cssText='background:#0c0d10;border:1px solid #2A2C31;padding:14px;width:min(760px,92vw);display:flex;flex-direction:column;gap:10px';const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;color:#CFCEC6;font-size:12px';const t=document.createElement('span');t.textContent='SVG';const msg=document.createElement('span');msg.id='__cmsg';msg.style.cssText='flex:1;color:#7C7B72';const bc=document.createElement('button');bc.textContent='COPY';bc.style.cssText='font-family:monospace;font-size:11px;background:#2C30E6;color:#fff;border:none;padding:7px 12px;cursor:pointer';const bx=document.createElement('button');bx.textContent='CLOSE';bx.style.cssText='font-family:monospace;font-size:11px;background:transparent;color:#CFCEC6;border:1px solid #2A2C31;padding:7px 12px;cursor:pointer';const ta=document.createElement('textarea');ta.id='__cta';ta.readOnly=true;ta.style.cssText='width:100%;height:54vh;background:#08090b;color:#CFCEC6;border:1px solid #2A2C31;font-family:monospace;font-size:11px;padding:10px;resize:none';row.appendChild(t);row.appendChild(msg);row.appendChild(bc);row.appendChild(bx);box.appendChild(row);box.appendChild(ta);w.appendChild(box);document.body.appendChild(w);const tryCopy=()=>{ta.focus();ta.select();try{ta.setSelectionRange(0,ta.value.length);}catch(_){}let ok=false;try{ok=document.execCommand('copy');}catch(_){}if(ok){msg.textContent='Copied to clipboard';return;}if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(()=>msg.textContent='Copied').catch(()=>msg.textContent='Press Cmd/Ctrl-C');}else msg.textContent='Press Cmd/Ctrl-C';};bc.onclick=tryCopy;bx.onclick=()=>w.style.display='none';w.addEventListener('click',e=>{if(e.target===w)w.style.display='none';});w.__try=tryCopy;}const ta=document.getElementById('__cta');ta.value=s;w.style.display='flex';document.getElementById('__cmsg').textContent='Press Cmd/Ctrl-C';w.__try();}
+stage.addEventListener('click',copySVG);
+render();
+</script></body></html>

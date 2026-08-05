@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glyph Studio</title>
+<style>
+  :root{
+    --bg:#0A0B0D;--panel:#121316;--panel-2:#16181B;
+    --line:#26282C;--line-soft:#1C1E21;
+    --cream:#F0E8D8;--muted:#6B6E73;--muted-2:#92959A;--amber:#E0B341;
+    --r:2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--cream);
+    font-family:"Aeonik","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;min-height:100vh;}
+  .mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;}
+
+  header{padding:28px 28px 20px;border-bottom:1px solid var(--line);
+    display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;}
+  .dna{width:60px;height:60px;flex:0 0 auto;border:1px solid var(--line);background:var(--panel);
+    display:flex;align-items:center;justify-content:center;border-radius:var(--r);}
+  .dna svg{width:34px;height:34px;}
+  .dna svg path{fill:var(--cream);}
+  .title-block h1{font-size:19px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em;}
+  .title-block .tag{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;}
+  .title-block p{margin:0;color:var(--muted-2);font-size:12.5px;line-height:1.45;max-width:48ch;}
+  .title-block .kbd{color:var(--cream);}
+
+  .controls{position:sticky;top:0;z-index:30;background:rgba(10,11,13,0.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);padding:14px 28px;display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap;}
+  .ctrl{display:flex;flex-direction:column;gap:7px;}
+  .ctrl label{font-size:10px;letter-spacing:0.13em;text-transform:uppercase;color:var(--muted);}
+  .ctrl .val{color:var(--cream);}
+  select,button,input[type=text]{font:inherit;color:var(--cream);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:var(--r);}
+  select{height:34px;padding:0 28px 0 10px;font-size:13px;cursor:pointer;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2392959A' stroke-width='1.3' fill='none'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center;min-width:170px;}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:140px;height:34px;background:transparent;cursor:pointer;}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line);}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--cream);border-radius:50%;margin-top:-5px;}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;background:var(--cream);border:none;border-radius:50%;}
+  .seed-row{display:flex;gap:6px;align-items:center;}
+  input[type=text].seed{height:34px;padding:0 10px;font-size:13px;width:120px;}
+  button{height:34px;padding:0 14px;font-size:12.5px;cursor:pointer;letter-spacing:0.01em;
+    transition:border-color .15s,background .15s,color .15s;}
+  button:hover{border-color:var(--muted);}
+  button.primary{background:var(--cream);color:#0A0B0D;border-color:var(--cream);font-weight:600;}
+  button.primary:hover{background:#fff;}
+  button.ghost{background:transparent;}
+
+  .pinned-wrap{padding:18px 28px 0;}
+  .section-label{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);
+    margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line-soft);}
+  .pinned-row{display:flex;gap:10px;flex-wrap:wrap;}
+
+  .gallery{padding:18px 28px 80px;display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(94px,1fr));}
+  .tile{position:relative;aspect-ratio:1;background:var(--panel);border:1px solid var(--line-soft);
+    border-radius:var(--r);cursor:pointer;padding:0;overflow:hidden;transition:border-color .15s,transform .12s;}
+  .tile:hover{border-color:var(--muted);transform:translateY(-2px);}
+  .tile:focus-visible{outline:2px solid var(--cream);outline-offset:2px;}
+  .tile svg{width:100%;height:100%;display:block;padding:18%;}
+  .tile .idx{position:absolute;top:5px;left:7px;font-size:9px;color:var(--muted);opacity:0;transition:opacity .15s;}
+  .tile:hover .idx{opacity:1;}
+  .tile .star{position:absolute;top:4px;right:5px;width:16px;height:16px;opacity:0;transition:opacity .15s;color:var(--muted);}
+  .tile:hover .star{opacity:.8;}
+  .tile.pinned .star{opacity:1;color:var(--amber);}
+  .tile .star svg{width:100%;height:100%;padding:0;}
+
+  .overlay{position:fixed;inset:0;background:rgba(6,7,8,0.82);backdrop-filter:blur(4px);z-index:60;
+    display:none;align-items:center;justify-content:center;padding:24px;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:6px;width:min(640px,100%);
+    max-height:90vh;overflow:auto;display:grid;grid-template-columns:300px 1fr;}
+  .modal .preview{background:var(--bg);border-right:1px solid var(--line);display:flex;align-items:center;justify-content:center;padding:40px;}
+  .modal .preview svg{width:100%;height:auto;max-width:200px;max-height:200px;}
+  .modal .meta{padding:24px;display:flex;flex-direction:column;gap:18px;}
+  .modal .meta h3{margin:0;font-size:15px;font-weight:600;}
+  .params{font-size:12px;line-height:1.9;color:var(--muted-2);}
+  .params b{color:var(--cream);font-weight:500;}
+  .modal .actions{display:flex;flex-direction:column;gap:8px;margin-top:auto;}
+  .modal .actions .row{display:flex;gap:8px;}
+  .modal .actions button{flex:1;}
+  .close-x{position:absolute;top:18px;right:22px;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;height:auto;padding:0;z-index:2;}
+  .close-x:hover{color:var(--cream);}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--cream);
+    color:#0A0B0D;font-size:12.5px;font-weight:600;padding:9px 18px;border-radius:var(--r);opacity:0;
+    pointer-events:none;transition:opacity .2s,transform .2s;z-index:90;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:560px){
+    .modal{grid-template-columns:1fr;}
+    .modal .preview{border-right:none;border-bottom:1px solid var(--line);}
+    header,.controls,.gallery,.pinned-wrap{padding-left:16px;padding-right:16px;}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dna" title="yasp glyph — the stepped stroke this tool riffs on">
+    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <path d="M24 8H0V16H24V8Z"/>
+      <path d="M24 40H48V48H24V40Z"/>
+      <path d="M48 0H24V8H48V0Z"/>
+      <path d="M0 32H24V40H0V32Z"/>
+      <path d="M36 24L24 24L24 16L36 16L36 24Z"/>
+      <path d="M48 32L36 32L36 24L48 24L48 32Z"/>
+    </svg>
+  </div>
+  <div class="title-block">
+    <div class="tag mono">Studio II · stroke marks</div>
+    <h1>Glyph Studio</h1>
+    <p>One hundred marks traced as a moving stroke — staircases, stems, ribbons — built from landscape bricks like the yasp glyph. Letterform energy, not icons. Same <span class="kbd mono">seed</span> + rules always rebuild the same marks.</p>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="ctrl">
+    <label for="engine">Engine</label>
+    <select id="engine">
+      <option value="mix">Mixed</option>
+      <option value="descend">Descend · staircase</option>
+      <option value="diagonal">Diagonal · clean</option>
+      <option value="serpentine">Serpentine · ribbon</option>
+      <option value="stem">Stem &amp; arm</option>
+      <option value="orthogonal">Orthogonal walk</option>
+      <option value="random">Randomized · symmetry</option>
+      <option value="alpha">Letterform · A–Z · 0–9</option>
+    </select>
+  </div>
+  <div class="ctrl">
+    <label for="cols">Columns · <span class="val mono" id="colsVal">4</span></label>
+    <input type="range" id="cols" min="3" max="8" value="4" step="1">
+  </div>
+  <div class="ctrl">
+    <label for="rows">Rows · <span class="val mono" id="rowsVal">6</span></label>
+    <input type="range" id="rows" min="4" max="8" value="6" step="1">
+  </div>
+  <div class="ctrl">
+    <label for="stroke">Stroke · <span class="val mono" id="strokeVal">2</span></label>
+    <input type="range" id="stroke" min="1" max="3" value="2" step="1">
+  </div>
+  <div class="ctrl">
+    <label for="gap">Brick gap · <span class="val mono" id="gapVal">0</span></label>
+    <input type="range" id="gap" min="0" max="100" value="0" step="2">
+  </div>
+  <div class="ctrl">
+    <label for="seed">Seed</label>
+    <div class="seed-row">
+      <input type="text" class="seed mono" id="seed" value="yasp">
+      <button class="ghost" id="shuffle" title="New random seed">↻</button>
+    </div>
+  </div>
+  <div class="ctrl">
+    <label>&nbsp;</label>
+    <button class="primary" id="sheetBtn">Export sheet</button>
+  </div>
+</div>
+
+<div class="pinned-wrap" id="pinnedWrap" style="display:none;">
+  <div class="section-label">Pinned</div>
+  <div class="pinned-row" id="pinnedRow"></div>
+</div>
+
+<div class="gallery" id="gallery"></div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal">
+    <button class="close-x" id="closeX" aria-label="Close">×</button>
+    <div class="preview" id="modalPreview"></div>
+    <div class="meta">
+      <h3 id="modalTitle">Mark 00</h3>
+      <div class="params mono" id="modalParams"></div>
+      <div class="actions">
+        <button id="pinBtn">Pin to board</button>
+        <div class="row">
+          <button id="dlSvg">Download SVG</button>
+          <button id="dlPng">Download PNG</button>
+        </div>
+        <button class="ghost" id="copySvg">Copy SVG markup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ Seeded RNG ============ */
+function xmur3(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}
+  return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+function makeRng(str){const s=xmur3(str);return mulberry32(s());}
+
+const ASPECT=1;                   // brick width : height — square pixels
+const ENG_SET=["descend","diagonal","serpentine","stem","orthogonal"];
+
+/* 5×7 bitmap font for the letterform engine — A–Z, 0–9 */
+const FONT_CHARS="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const FONT={
+ A:["01110","10001","10001","11111","10001","10001","10001"],
+ B:["11110","10001","10001","11110","10001","10001","11110"],
+ C:["01110","10001","10000","10000","10000","10001","01110"],
+ D:["11100","10010","10001","10001","10001","10010","11100"],
+ E:["11111","10000","10000","11110","10000","10000","11111"],
+ F:["11111","10000","10000","11110","10000","10000","10000"],
+ G:["01110","10001","10000","10111","10001","10001","01111"],
+ H:["10001","10001","10001","11111","10001","10001","10001"],
+ I:["01110","00100","00100","00100","00100","00100","01110"],
+ J:["00111","00010","00010","00010","00010","10010","01100"],
+ K:["10001","10010","10100","11000","10100","10010","10001"],
+ L:["10000","10000","10000","10000","10000","10000","11111"],
+ M:["10001","11011","10101","10101","10001","10001","10001"],
+ N:["10001","11001","11001","10101","10011","10011","10001"],
+ O:["01110","10001","10001","10001","10001","10001","01110"],
+ P:["11110","10001","10001","11110","10000","10000","10000"],
+ Q:["01110","10001","10001","10001","10101","10010","01101"],
+ R:["11110","10001","10001","11110","10100","10010","10001"],
+ S:["01111","10000","10000","01110","00001","00001","11110"],
+ T:["11111","00100","00100","00100","00100","00100","00100"],
+ U:["10001","10001","10001","10001","10001","10001","01110"],
+ V:["10001","10001","10001","10001","10001","01010","00100"],
+ W:["10001","10001","10001","10101","10101","11011","10001"],
+ X:["10001","10001","01010","00100","01010","10001","10001"],
+ Y:["10001","10001","01010","00100","00100","00100","00100"],
+ Z:["11111","00001","00010","00100","01000","10000","11111"],
+ "0":["01110","10001","10011","10101","11001","10001","01110"],
+ "1":["00100","01100","00100","00100","00100","00100","01110"],
+ "2":["01110","10001","00001","00010","00100","01000","11111"],
+ "3":["11111","00010","00100","00010","00001","10001","01110"],
+ "4":["00010","00110","01010","10010","11111","00010","00010"],
+ "5":["11111","10000","11110","00001","00001","10001","01110"],
+ "6":["00110","01000","10000","11110","10001","10001","01110"],
+ "7":["11111","00001","00010","00100","01000","01000","01000"],
+ "8":["01110","10001","10001","01110","10001","10001","01110"],
+ "9":["01110","10001","10001","01111","00001","00010","01100"]
+};
+const FONT_W=5,FONT_H=7;
+
+/* ============ Mark generation — a walker laying bricks ============ */
+function generate(p){
+  const C=p.cols,R=p.rows,sw=p.stroke;
+  const r=makeRng(p.seed+"|"+p.engine+"|"+C+"x"+R+"|"+sw);
+  let eng=p.engine; if(eng==="mix") eng=ENG_SET[Math.floor(r()*ENG_SET.length)];
+  let cells=Array.from({length:R},()=>new Array(C).fill(false));
+  const put=(rr,cc)=>{if(rr>=0&&rr<R&&cc>=0&&cc<C)cells[rr][cc]=true;};
+  const clamp=c=>Math.max(0,Math.min(C-1,c));
+  const ri=n=>Math.floor(r()*n);
+
+  if(eng==="descend"){
+    let row=0,col=ri(C),dir=r()<0.5?1:-1;
+    while(row<R){
+      const run=1+(r()<0.65?1:0)+(sw>2&&r()<0.4?1:0);
+      for(let k=0;k<run;k++)put(row,clamp(col+dir*k));
+      row+=1;
+      const ch=r();
+      if(ch<0.45){col=col+dir*run;dir=-dir;col+=dir;}
+      else if(ch<0.75){col+=dir;}
+      else{dir=-dir;col+=dir;}
+      col=clamp(col);
+    }
+  }else if(eng==="diagonal"){
+    let row=0,col=ri(C),dir=r()<0.5?1:-1;
+    while(row<R){
+      for(let k=0;k<sw;k++)put(row,clamp(col+dir*k));
+      row++;col+=dir;
+      if(col<0||col>C-1){dir=-dir;col=clamp(col);}
+    }
+  }else if(eng==="serpentine"){
+    let dir=1;
+    for(let row=0;row<R;row++){
+      const start=dir>0?0:C-1;
+      if(r()<0.82){const len=1+ri(C);for(let k=0;k<len;k++)put(row,clamp(start+dir*k));}
+      else{put(row,start);}
+      dir=-dir;
+    }
+  }else if(eng==="stem"){
+    const stem=ri(C),top=ri(2),bot=R-1-ri(2);
+    for(let row=top;row<=Math.max(top,bot);row++){for(let k=0;k<Math.min(sw,1+ (sw>1?1:0));k++)put(row,clamp(stem+k));}
+    const arms=1+ri(3);
+    for(let a=0;a<arms;a++){const ar=top+ri(Math.max(1,bot-top+1));const ad=r()<0.5?1:-1;const al=1+ri(C-1);
+      for(let k=0;k<=al;k++)put(ar,clamp(stem+ad*k));}
+  }else if(eng==="alpha"){ /* letterform — clean native A–Z / 0–9, padded so it's centered + can thicken */
+    const ch=FONT_CHARS[ri(FONT_CHARS.length)];
+    const bmp=FONT[ch];
+    const inv=r()<0.32;                                   // ~1/3 inverse (letter as negative space)
+    const weight=(r()<(sw-1)/2)?1:0;                      // Stroke slider sets thin↔bold ratio across the sheet
+    const pad=1,GW=FONT_W+pad*2,GH=FONT_H+pad*2;          // 1-cell border → centered + room to thicken
+    let gm=Array.from({length:GH},()=>new Array(GW).fill(false));
+    for(let fy=0;fy<FONT_H;fy++)for(let fx=0;fx<FONT_W;fx++)if(bmp[fy][fx]==="1")gm[fy+pad][fx+pad]=true;
+    for(let s=0;s<weight;s++){                            // dilate (thicken) the strokes outward
+      const src=gm.map(rw=>rw.slice());
+      for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+        if(src[y][x])continue;
+        if((y>0&&src[y-1][x])||(y<GH-1&&src[y+1][x])||(x>0&&src[y][x-1])||(x<GW-1&&src[y][x+1]))gm[y][x]=true;
+      }
+    }
+    const out=Array.from({length:GH},()=>new Array(GW).fill(inv));   // inverse → solid field
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++)if(gm[y][x])out[y][x]=!inv;
+    cells=out;                                            // letters render at their own clean resolution
+  }else if(eng==="random"){ /* randomized — seeded density structured by symmetry → beautiful marks */
+    const density=0.32+r()*0.30;                          // seeded fill density 0.32–0.62
+    const modes=["mirrorV","mirrorV","quad","quad","rot","mirrorH","free"];  // beauty-biased toward symmetry
+    const mode=modes[ri(modes.length)];
+    if(mode==="mirrorV"){for(let y=0;y<R;y++)for(let x=0;x<Math.ceil(C/2);x++){const on=r()<density;cells[y][x]=on;cells[y][C-1-x]=on;}}
+    else if(mode==="mirrorH"){for(let y=0;y<Math.ceil(R/2);y++)for(let x=0;x<C;x++){const on=r()<density;cells[y][x]=on;cells[R-1-y][x]=on;}}
+    else if(mode==="quad"){for(let y=0;y<Math.ceil(R/2);y++)for(let x=0;x<Math.ceil(C/2);x++){const on=r()<density;cells[y][x]=on;cells[y][C-1-x]=on;cells[R-1-y][x]=on;cells[R-1-y][C-1-x]=on;}}
+    else if(mode==="rot"){const tot=R*C;for(let i=0;i<Math.ceil(tot/2);i++){const y=Math.floor(i/C),x=i%C;const on=r()<density;cells[y][x]=on;cells[R-1-y][C-1-x]=on;}}
+    else{for(let y=0;y<R;y++)for(let x=0;x<C;x++)cells[y][x]=r()<density;}
+  }else{ /* orthogonal connected walk */
+    let row=ri(R),col=ri(C);put(row,col);
+    const steps=Math.round(C*R*(0.32+sw*0.09));
+    for(let s=0;s<steps;s++){
+      const mv=[[0,1],[0,-1],[1,0],[-1,0]].filter(([dr,dc])=>row+dr>=0&&row+dr<R&&col+dc>=0&&col+dc<C);
+      if(!mv.length)break;
+      const [dr,dc]=mv[ri(mv.length)];row+=dr;col+=dc;put(row,col);
+    }
+  }
+  let n=0;cells.forEach(rw=>rw.forEach(v=>{if(v)n++;}));
+  if(!n)cells[Math.floor(R/2)][Math.floor(C/2)]=true;
+  return cells;
+}
+
+/* ============ Rendering ============ */
+function dims(cells,p,unit){
+  const R=cells.length,C=cells[0].length;          // size from the mark itself
+  const bw=unit*ASPECT,bh=unit;                   // brick stays full size
+  const gx=(p.gap/100)*bw,gy=(p.gap/100)*bh;      // gap = % of a brick, added between
+  return {W:C*bw+(C-1)*gx, H:R*bh+(R-1)*gy};
+}
+function buildSvg(cells,p,unit,opts){
+  opts=opts||{};
+  const R=cells.length,C=cells[0].length;          // size from the mark itself
+  const bw=unit*ASPECT,bh=unit;                   // brick stays full size
+  const gx=(p.gap/100)*bw,gy=(p.gap/100)*bh;      // gap = % of a brick, added between
+  const sx=bw+gx,sy=bh+gy;                         // stride = brick + gap
+  const W=C*bw+(C-1)*gx,H=R*bh+(R-1)*gy;
+  let rects="";
+  for(let y=0;y<R;y++)for(let x=0;x<C;x++){
+    if(!cells[y][x])continue;
+    const px=(x*sx).toFixed(2),py=(y*sy).toFixed(2);
+    rects+=`<rect x="${px}" y="${py}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="#F0E8D8"/>`;
+  }
+  const bg=opts.bg?`<rect width="${W.toFixed(2)}" height="${H.toFixed(2)}" fill="${opts.bg}"/>`:"";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges">${bg}${rects}</svg>`;
+}
+
+/* ============ State + DOM ============ */
+const COUNT=100;
+const $=id=>document.getElementById(id);
+const els={gallery:$("gallery"),engine:$("engine"),cols:$("cols"),colsVal:$("colsVal"),rows:$("rows"),rowsVal:$("rowsVal"),
+  stroke:$("stroke"),strokeVal:$("strokeVal"),gap:$("gap"),gapVal:$("gapVal"),seed:$("seed"),shuffle:$("shuffle"),
+  sheetBtn:$("sheetBtn"),pinnedWrap:$("pinnedWrap"),pinnedRow:$("pinnedRow"),overlay:$("overlay"),closeX:$("closeX"),
+  mPreview:$("modalPreview"),mTitle:$("modalTitle"),mParams:$("modalParams"),pinBtn:$("pinBtn"),
+  dlSvg:$("dlSvg"),dlPng:$("dlPng"),copySvg:$("copySvg"),toast:$("toast")};
+
+let pinned=[],active=null;
+
+function readControls(){return{engine:els.engine.value,cols:+els.cols.value,rows:+els.rows.value,
+  stroke:+els.stroke.value,gap:+els.gap.value,baseSeed:els.seed.value.trim()||"yasp"};}
+function tileParams(b,i){return{seed:`${b.baseSeed}-${i}`,engine:b.engine,cols:b.cols,rows:b.rows,stroke:b.stroke,gap:b.gap};}
+
+function render(){
+  const base=readControls();
+  els.gallery.innerHTML="";
+  const frag=document.createDocumentFragment();
+  for(let i=0;i<COUNT;i++){
+    const p=tileParams(base,i),cells=generate(p);
+    const btn=document.createElement("button");
+    btn.className="tile"+(isPinned(p)?" pinned":"");
+    btn.innerHTML=`<span class="idx mono">${String(i).padStart(2,"0")}</span><span class="star">${starSvg()}</span>`+buildSvg(cells,p,40);
+    btn.addEventListener("click",()=>openModal(p,i));
+    frag.appendChild(btn);
+  }
+  els.gallery.appendChild(frag);
+}
+function starSvg(){return `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.1 1.2 6L12 16.9 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg>`;}
+
+function openModal(p,i){
+  active={...p,index:i};
+  els.mPreview.innerHTML=buildSvg(generate(p),p,60);
+  els.mTitle.textContent="Mark "+String(i).padStart(2,"0");
+  els.mParams.innerHTML=`seed <b>${p.seed}</b><br>engine <b>${p.engine}</b><br>grid <b>${p.cols}×${p.rows}</b><br>stroke <b>${p.stroke}</b><br>brick gap <b>${p.gap}</b>`;
+  els.pinBtn.textContent=isPinned(p)?"Unpin":"Pin to board";
+  els.overlay.classList.add("open");
+}
+function closeModal(){els.overlay.classList.remove("open");active=null;}
+
+function pinKey(p){return `${p.seed}|${p.engine}|${p.cols}|${p.rows}|${p.stroke}|${p.gap}`;}
+function isPinned(p){return pinned.some(q=>pinKey(q)===pinKey(p));}
+function togglePin(p){if(isPinned(p))pinned=pinned.filter(q=>pinKey(q)!==pinKey(p));else pinned.push({...p});renderPinned();render();}
+function renderPinned(){
+  els.pinnedWrap.style.display=pinned.length?"block":"none";els.pinnedRow.innerHTML="";
+  pinned.forEach((p,k)=>{const btn=document.createElement("button");btn.className="tile pinned";
+    btn.style.width="80px";btn.style.height="80px";btn.style.aspectRatio="auto";
+    btn.innerHTML=`<span class="star">${starSvg()}</span>`+buildSvg(generate(p),p,40);
+    btn.addEventListener("click",()=>openModal(p,k));els.pinnedRow.appendChild(btn);});
+}
+
+/* ============ Export ============ */
+function download(name,data,type){const blob=new Blob([data],{type}),url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function markSvgStandalone(p){return buildSvg(generate(p),p,80);}
+function exportSvg(p){download(`glyph-${p.seed}.svg`,markSvgStandalone(p),"image/svg+xml");toast("SVG downloaded");}
+function exportPng(p){
+  const cells=generate(p);
+  const maxDim=1600,d=dims(cells,p,1),scale=maxDim/Math.max(d.W,d.H);
+  const outW=Math.round(d.W*scale),outH=Math.round(d.H*scale);
+  const svg=buildSvg(cells,p,Math.round(80*scale/2));
+  const img=new Image(),url="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+  img.onload=()=>{const c=document.createElement("canvas");c.width=outW;c.height=outH;
+    const ctx=c.getContext("2d");ctx.imageSmoothingEnabled=false;ctx.drawImage(img,0,0,outW,outH);
+    c.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=`glyph-${p.seed}.png`;a.click();
+      setTimeout(()=>URL.revokeObjectURL(u),1000);toast("PNG downloaded");},"image/png");};
+  img.src=url;
+}
+function copySvg(p){navigator.clipboard?.writeText(markSvgStandalone(p)).then(()=>toast("SVG markup copied")).catch(()=>toast("Copy failed"));}
+
+function exportSheet(){
+  const base=readControls(),cellPx=120,pad=16,cols=10;
+  const W=cols*cellPx,H=cols*cellPx;let body="";
+  for(let i=0;i<COUNT;i++){
+    const p=tileParams(base,i),cells=generate(p);
+    const ox=(i%cols)*cellPx,oy=Math.floor(i/cols)*cellPx;
+    const box=cellPx-pad*2;
+    const Rr=cells.length,Cc=cells[0].length;     // size from the mark itself
+    const g=p.gap/100;
+    const Wu=Cc*ASPECT+(Cc-1)*g*ASPECT;            // mark width in unit terms (incl. gaps)
+    const Hu=Rr+(Rr-1)*g;                          // mark height in unit terms
+    const unit=Math.min(box/Wu,box/Hu);            // fit the spaced mark into the cell
+    const bw=unit*ASPECT,bh=unit,sx=bw+g*bw,sy=bh+g*bh;
+    const mw=Cc*bw+(Cc-1)*g*bw,mh=Rr*bh+(Rr-1)*g*bh;
+    const offx=ox+pad+(box-mw)/2,offy=oy+pad+(box-mh)/2;
+    for(let y=0;y<Rr;y++)for(let x=0;x<Cc;x++){
+      if(!cells[y][x])continue;
+      body+=`<rect x="${(offx+x*sx).toFixed(2)}" y="${(offy+y*sy).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="#F0E8D8"/>`;
+    }
+  }
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" shape-rendering="crispEdges"><rect width="${W}" height="${H}" fill="#0A0B0D"/>${body}</svg>`;
+  download(`glyph-sheet-${base.baseSeed}.svg`,svg,"image/svg+xml");toast("Contact sheet exported");
+}
+
+let toastT;function toast(m){els.toast.textContent=m;els.toast.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>els.toast.classList.remove("show"),1600);}
+
+/* ============ Wiring ============ */
+function syncLabels(){els.colsVal.textContent=els.cols.value;els.rowsVal.textContent=els.rows.value;
+  els.strokeVal.textContent=els.stroke.value;els.gapVal.textContent=els.gap.value;}
+let rafT;function reRender(){cancelAnimationFrame(rafT);rafT=requestAnimationFrame(render);}
+
+els.engine.addEventListener("change",render);
+[els.cols,els.rows,els.stroke,els.gap].forEach(el=>el.addEventListener("input",()=>{syncLabels();reRender();}));
+els.seed.addEventListener("input",reRender);
+els.shuffle.addEventListener("click",()=>{els.seed.value=Math.random().toString(36).slice(2,8);render();});
+els.sheetBtn.addEventListener("click",exportSheet);
+els.closeX.addEventListener("click",closeModal);
+els.overlay.addEventListener("click",e=>{if(e.target===els.overlay)closeModal();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+els.pinBtn.addEventListener("click",()=>{if(active){togglePin(active);els.pinBtn.textContent=isPinned(active)?"Unpin":"Pin to board";}});
+els.dlSvg.addEventListener("click",()=>{if(active)exportSvg(active);});
+els.dlPng.addEventListener("click",()=>{if(active)exportPng(active);});
+els.copySvg.addEventListener("click",()=>{if(active)copySvg(active);});
+
+syncLabels();render();
+</script>
+</body>
+</html>

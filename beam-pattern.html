@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beam Field Generator</title>
+<style>
+  :root{
+    --carbon:#0A0B0D; --carbon-2:#121317; --carbon-3:#181A1F;
+    --line:rgba(240,232,216,.10); --line-2:rgba(240,232,216,.18);
+    --cream:#F0E8D8; --cream-dim:rgba(240,232,216,.55); --cream-faint:rgba(240,232,216,.35);
+    --sage:#9DB89E; --sage-dim:rgba(157,184,158,.35);
+    --radius:10px;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--carbon);color:var(--cream);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--sage)}
+
+  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:18px 22px;border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;font-weight:600;letter-spacing:.02em;margin:0}
+  header .tag{font-family:var(--mono);font-size:11px;color:var(--cream-faint);letter-spacing:.06em;text-transform:uppercase}
+  header .thesis{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--cream-dim)}
+  header .thesis b{color:var(--sage);font-weight:500}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:0;min-height:calc(100% - 61px)}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+
+  .stage{display:flex;flex-direction:column;padding:22px;gap:14px;background:radial-gradient(120% 90% at 50% -10%, rgba(157,184,158,.04), transparent 60%),var(--carbon);min-width:0}
+  .canvas-wrap{position:relative;flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--carbon);min-height:340px}
+  #stageSvg{display:block;width:100%;height:auto;max-height:72vh}
+  .stage-bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--cream-dim)}
+  .stage-bar .k{color:var(--cream-faint);text-transform:uppercase;letter-spacing:.06em}
+  .stage-bar .v{color:var(--cream)}
+  .stage-bar .seed-v{color:var(--sage)}
+
+  .panel{border-left:1px solid var(--line);background:var(--carbon-2);padding:0 0 40px;overflow-y:auto;max-height:calc(100vh - 61px)}
+  @media(max-width:900px){.panel{border-left:none;border-top:1px solid var(--line);max-height:none}}
+  .section{padding:18px 20px;border-bottom:1px solid var(--line)}
+  .section > .h{display:flex;align-items:center;gap:8px;margin:0 0 14px;font-family:var(--mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--cream-dim)}
+  .section > .h .n{color:var(--sage);font-weight:500}
+  .hint{font-family:var(--mono);font-size:10px;color:var(--cream-faint);margin-top:9px;line-height:1.5}
+
+  label.field{display:block;margin:0 0 13px}
+  label.field:last-child{margin-bottom:0}
+  .field .lab{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:11px;color:var(--cream-dim);margin-bottom:6px}
+  .field .lab .val{color:var(--cream)}
+  .field .sub{font-family:var(--mono);font-size:9.5px;color:var(--cream-faint);letter-spacing:.02em}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line-2);border-radius:2px;outline:none;margin:6px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--cream);border:2px solid var(--carbon-2);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--cream);border:2px solid var(--carbon-2);cursor:pointer}
+
+  select,input[type=number]{width:100%;background:var(--carbon-3);color:var(--cream);border:1px solid var(--line-2);border-radius:7px;padding:8px 10px;font-family:var(--mono);font-size:12px;outline:none}
+  select:focus,input:focus{border-color:var(--sage-dim)}
+  input[type=color]{width:100%;height:34px;padding:2px;background:var(--carbon-3);border:1px solid var(--line-2);border-radius:7px;cursor:pointer}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row2 .field{margin-bottom:0}
+
+  .swatches{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+  .sw{position:relative;aspect-ratio:1;border-radius:7px;cursor:pointer;border:1px solid var(--line-2);overflow:hidden;transition:transform .12s ease,border-color .12s ease}
+  .sw:hover{transform:translateY(-1px)}
+  .sw .glow{position:absolute;inset:0}
+  .sw.on{border-color:var(--cream)}
+  .sw:not(.on){opacity:.32;filter:saturate(.5)}
+  .sw .dot{position:absolute;right:4px;top:4px;width:7px;height:7px;border-radius:50%;background:var(--cream);opacity:0;transition:opacity .12s}
+  .sw.on .dot{opacity:1}
+
+  textarea#prompt{width:100%;min-height:64px;resize:vertical;background:var(--carbon-3);color:var(--cream);border:1px solid var(--line-2);border-radius:8px;padding:10px 11px;font-family:var(--sans);font-size:13px;line-height:1.45;outline:none}
+  textarea#prompt:focus{border-color:var(--sage-dim)}
+  .agent-row{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .lock{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--cream-dim);cursor:pointer;user-select:none;white-space:nowrap}
+  .lock input{width:14px;height:14px;accent-color:var(--sage)}
+  .status{font-family:var(--mono);font-size:11px;margin-top:9px;min-height:15px;color:var(--cream-faint)}
+  .status.err{color:#E28C8C}
+  .status.ok{color:var(--sage)}
+  .examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{font-family:var(--mono);font-size:10.5px;color:var(--cream-dim);border:1px solid var(--line-2);border-radius:20px;padding:4px 10px;cursor:pointer;background:transparent;transition:border-color .12s,color .12s}
+  .chip:hover{border-color:var(--sage-dim);color:var(--cream)}
+
+  button{font-family:var(--mono);cursor:pointer}
+  .btn{border:1px solid var(--line-2);background:var(--carbon-3);color:var(--cream);border-radius:8px;padding:9px 12px;font-size:12px;letter-spacing:.02em;transition:border-color .12s,background .12s;white-space:nowrap}
+  .btn:hover{border-color:var(--sage-dim)}
+  .btn:active{background:var(--carbon)}
+  .btn.primary{background:var(--sage);color:var(--carbon);border-color:var(--sage);font-weight:600}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.full{width:100%}
+  .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .btn-grid .full{grid-column:1/-1}
+
+  .reproduce{font-family:var(--mono);font-size:11px;color:var(--cream-dim);background:var(--carbon-3);border:1px solid var(--line);border-radius:8px;padding:10px 11px;margin-top:12px;word-break:break-all;line-height:1.5}
+  .reproduce b{color:var(--sage);font-weight:500}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Beam Field Generator</h1>
+  <span class="tag">yasp · field-driven glow</span>
+  <span class="thesis">structure comes from <b>fields</b> · the <b>seed</b> makes it reproducible</span>
+</header>
+
+<div class="layout">
+  <div class="stage">
+    <div class="canvas-wrap">
+      <svg id="stageSvg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <div class="stage-bar">
+      <span><span class="k">model</span> <span class="v" id="barModel">—</span></span>
+      <span><span class="k">seed</span> <span class="v seed-v" id="barSeed">—</span></span>
+      <span><span class="k">beams</span> <span class="v" id="barTiles">—</span></span>
+      <span><span class="k">palette</span> <span class="v" id="barPal">—</span></span>
+    </div>
+  </div>
+
+  <div class="panel">
+
+    <!-- AGENT -->
+    <div class="section">
+      <div class="h"><span class="n">Agent</span> — describe the field</div>
+      <textarea id="prompt" placeholder="e.g. a slow warm current flowing left to right, deep foreground beams, hazy background"></textarea>
+      <div class="agent-row">
+        <button class="btn primary full" id="genBtn">Generate field</button>
+        <label class="lock" title="Keep the same seed so agent runs stay reproducible">
+          <input type="checkbox" id="seedLock" checked> lock seed
+        </label>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="examples" id="examples">
+        <button class="chip">flocking current, warm amber, deep</button>
+        <button class="chip">layered depth map, cool cyan haze</button>
+        <button class="chip">tight vortex around a magenta core</button>
+        <button class="chip">sparse drifting embers, calm</button>
+      </div>
+    </div>
+
+    <!-- STRUCTURE -->
+    <div class="section">
+      <div class="h"><span class="n">Structure</span> — field intelligence</div>
+
+      <label class="field">
+        <span class="lab">Model</span>
+        <select id="model">
+          <option value="flow" selected>Flow — flocking streams</option>
+          <option value="field">Field — depth map</option>
+          <option value="vortex">Vortex — focal swirl</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="lab">Coherence <span class="val" id="coherenceVal">0.82</span></span>
+        <span class="sub">how strictly beams align to the field — high = flock, low = chaos</span>
+        <input type="range" id="coherence" min="0" max="1" step="0.01" value="0.82">
+      </label>
+
+      <label class="field">
+        <span class="lab">Flow scale <span class="val" id="flowScaleVal">2.4</span></span>
+        <span class="sub">low = wide sweeping currents · high = tight eddies</span>
+        <input type="range" id="flowScale" min="0.6" max="6" step="0.1" value="2.4">
+      </label>
+
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Turbulence <span class="val" id="turbVal">3</span></span>
+          <input type="range" id="turb" min="1" max="6" step="1" value="3">
+        </label>
+        <label class="field">
+          <span class="lab">Density <span class="val" id="densityVal">0.55</span></span>
+          <input type="range" id="density" min="0" max="1" step="0.01" value="0.55">
+        </label>
+      </div>
+
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Clustering <span class="val" id="clusterVal">0.4</span></span>
+          <input type="range" id="cluster" min="0" max="1" step="0.01" value="0.4">
+        </label>
+        <label class="field">
+          <span class="lab">Depth <span class="val" id="depthVal">0.65</span></span>
+          <input type="range" id="depth" min="0" max="1" step="0.01" value="0.65">
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="lab">Trail length <span class="val" id="trailVal">0.5</span></span>
+        <span class="sub">stream length — Flow model</span>
+        <input type="range" id="trail" min="0" max="1" step="0.01" value="0.5">
+      </label>
+
+      <label class="field">
+        <span class="lab">Flow direction <span class="val" id="baseRotVal">0°</span></span>
+        <input type="range" id="baseRot" min="0" max="360" step="15" value="0">
+      </label>
+    </div>
+
+    <!-- PALETTE -->
+    <div class="section">
+      <div class="h"><span class="n">Palette</span> — colour forms zones</div>
+      <div class="swatches" id="swatches"></div>
+      <div class="hint">Colours are assigned by region, so they pool into areas rather than scatter.</div>
+    </div>
+
+    <!-- GLOW -->
+    <div class="section">
+      <div class="h"><span class="n">Glow &amp; depth of field</span></div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Glow <span class="val" id="glowVal">3</span></span>
+          <input type="range" id="glow" min="0" max="20" step="1" value="3">
+        </label>
+        <label class="field">
+          <span class="lab">Far haze <span class="val" id="depthBlurVal">11</span></span>
+          <input type="range" id="depthBlur" min="0" max="34" step="1" value="11">
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Blend</span>
+          <select id="blend">
+            <option value="screen" selected>Screen</option>
+            <option value="lighten">Lighten</option>
+            <option value="plus-lighter">Plus (additive)</option>
+            <option value="normal">Normal</option>
+            <option value="hard-light">Hard light</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="lab">Background</span>
+          <input type="color" id="bg" value="#0A0B0D">
+        </label>
+      </div>
+      <div class="hint">Distant beams are smaller, dimmer and hazier; near beams are crisp and bright.</div>
+    </div>
+
+    <!-- SEED -->
+    <div class="section">
+      <div class="h"><span class="n">Seed</span> — determinism</div>
+      <div class="btn-grid">
+        <input type="number" id="seed" value="1847" min="0" step="1">
+        <button class="btn" id="randSeed">Randomize</button>
+      </div>
+      <div class="reproduce" id="reproduce"></div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="section">
+      <div class="h"><span class="n">Export</span></div>
+      <div class="btn-grid">
+        <button class="btn" id="copySvg">Copy SVG</button>
+        <button class="btn" id="dlSvg">Download SVG</button>
+        <button class="btn" id="dlPng">Download PNG</button>
+        <button class="btn" id="copyCfg">Copy recipe</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- palette (index 0 = original uploaded hue) ---------- */
+const PALETTE = {
+  magenta:{base:"#B832D2",hi:"#F6D8FA"}, cyan:{base:"#32C5D2",hi:"#D8F7FA"},
+  emerald:{base:"#2ED2A0",hi:"#D8FAF0"}, amber:{base:"#D2A032",hi:"#FAF0D8"},
+  coral:{base:"#E24C4C",hi:"#FAD8D8"},   indigo:{base:"#6A32D2",hi:"#E2D8FA"},
+  lime:{base:"#A8D232",hi:"#F2FAD8"},
+};
+const PAL_KEYS = Object.keys(PALETTE);
+
+/* ---------- state ---------- */
+const state = {
+  seed:1847, model:"flow",
+  coherence:0.82, flowScale:2.4, turb:3, density:0.55,
+  cluster:0.4, depth:0.65, trail:0.5, baseRot:0,
+  glow:3, depthBlur:11, blend:"screen", bg:"#0A0B0D",
+  colors:["amber","coral","magenta"],
+};
+
+/* ---------- math + deterministic noise ---------- */
+const VIEW = 800, MAX_TILES = 1800;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,lo,hi)=>Math.min(hi,Math.max(lo,v));
+const smooth=t=>t*t*(3-2*t);
+const sstep=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
+
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+function hash2(ix,iy,seed){
+  let h=(ix|0)*374761393 + (iy|0)*668265263 + (seed|0)*2147483647;
+  h=(h^(h>>>13)); h=Math.imul(h,1274126177);
+  return ((h^(h>>>16))>>>0)/4294967296;
+}
+function vnoise(x,y,seed){
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const a=hash2(ix,iy,seed),b=hash2(ix+1,iy,seed),c=hash2(ix,iy+1,seed),d=hash2(ix+1,iy+1,seed);
+  const u=smooth(fx),v=smooth(fy);
+  return lerp(lerp(a,b,u),lerp(c,d,u),v);
+}
+function fbm(x,y,seed,oct){
+  let amp=0.5,freq=1,sum=0,norm=0;
+  for(let i=0;i<oct;i++){sum+=amp*vnoise(x*freq,y*freq,seed+i*1013);norm+=amp;amp*=0.5;freq*=2;}
+  return sum/norm; // ~0..1
+}
+
+/* ---------- build the field-driven SVG ---------- */
+function buildSVG(cfg){
+  const colors = cfg.colors.length ? cfg.colors : ["magenta"];
+  const fs = cfg.flowScale, oct = cfg.turb, baseR = cfg.baseRot*Math.PI/180;
+  const sFlow=cfg.seed, sDepth=cfg.seed+1315, sDens=cfg.seed+7777, sReg=cfg.seed+424242;
+
+  // continuous fields -----------------------------------------
+  const pot=(nx,ny)=>fbm(nx*fs,ny*fs,sFlow,oct);
+  function flowAngle(x,y){
+    const nx=x/VIEW,ny=y/VIEW,e=0.0016;
+    const dPdx=(pot(nx+e,ny)-pot(nx-e,ny))/(2*e);
+    const dPdy=(pot(nx,ny+e)-pot(nx,ny-e))/(2*e);
+    return Math.atan2(-dPdx,dPdy)+baseR;           // curl of potential
+  }
+  const depthAt=(x,y)=>clamp(fbm(x/VIEW*fs*0.45+5.2,y/VIEW*fs*0.45+1.7,sDepth,3),0,1);
+  const densAt =(x,y)=>fbm(x/VIEW*fs*0.6+9.1,y/VIEW*fs*0.6+4.3,sDens,3);
+  function regionColor(x,y,rnd){
+    const rf=fbm(x/VIEW*1.6+2,y/VIEW*1.6+7,sReg,2);
+    let idx=clamp(Math.floor(rf*colors.length),0,colors.length-1);
+    if(rnd()<(1-cfg.coherence)*0.35) idx=Math.floor(rnd()*colors.length);
+    return colors[idx];
+  }
+
+  // vortex field ----------------------------------------------
+  const av=mulberry32(cfg.seed^0x27D4EB2F), attr=[];
+  for(let i=0;i<3;i++) attr.push({x:av()*VIEW,y:av()*VIEW,spin:av()<0.5?-1:1});
+  function vortexAngle(x,y){
+    let vx=0,vy=0;
+    for(const a of attr){const dx=x-a.x,dy=y-a.y;const r2=dx*dx+dy*dy+(VIEW*0.05)**2;const w=a.spin/r2*VIEW*VIEW*0.02;vx+=-dy*w;vy+=dx*w;}
+    const ca=flowAngle(x,y); vx+=Math.cos(ca)*0.15; vy+=Math.sin(ca)*0.15;
+    return Math.atan2(vy,vx)+baseR;
+  }
+
+  // depth -> scale / opacity ----------------------------------
+  const scaleFar=lerp(0.85,0.22,cfg.depth), scaleNear=1.0;
+  const opFar=lerp(0.85,0.18,cfg.depth),   opNear=1.0;
+  const refGrid=lerp(6,34,cfg.density), T=VIEW/refGrid;
+
+  const tiles=[];
+  const push=(x,y,ang,sc,op,color,d)=>{
+    if(tiles.length>=MAX_TILES) return false;
+    tiles.push({x,y,rot:ang*180/Math.PI,sc,op,color,d}); return true;
+  };
+
+  if(cfg.model==="flow"){
+    // integrate particles along the flow field -> flocking trails
+    const rnd=mulberry32(cfg.seed^0x9E3779B9);
+    const particles=Math.round(lerp(15,150,cfg.density));
+    const trailLen=Math.round(lerp(4,34,cfg.trail));
+    const stepLen=T*0.5, side=Math.ceil(Math.sqrt(particles)), gap=VIEW/side;
+    let placed=0;
+    outer:
+    for(let gy=0;gy<side;gy++) for(let gx=0;gx<side;gx++){
+      if(placed>=particles) break outer;
+      let px=(gx+0.5)*gap+(rnd()-0.5)*gap, py=(gy+0.5)*gap+(rnd()-0.5)*gap;
+      placed++;
+      // clustering: drop whole streams in low-density regions
+      const keepP=lerp(1,sstep(densAt(px,py)),cfg.cluster);
+      if(rnd()>keepP) continue;
+      const cKey=regionColor(px,py,rnd);
+      for(let s=0;s<trailLen;s++){
+        const d=depthAt(px,py);
+        let ang=flowAngle(px,py)+(rnd()-0.5)*(1-cfg.coherence)*Math.PI;
+        const tT=trailLen>1?s/(trailLen-1):0;
+        const op=lerp(opFar,opNear,d)*(1-tT*0.55);
+        const sc=lerp(scaleFar,scaleNear,d)*(1-tT*0.25);
+        if(op>0.03 && !push(px,py,ang,sc,op,cKey,d)) break outer;
+        px+=Math.cos(ang)*stepLen; py+=Math.sin(ang)*stepLen;
+        if(px<-T||px>VIEW+T||py<-T||py>VIEW+T) break;
+      }
+    }
+  } else {
+    // static grid sampling the fields -> depth map / vortex
+    const res=Math.round(refGrid), gap=VIEW/res;
+    const rnd=mulberry32(cfg.seed^0x85EBCA6B);
+    for(let gy=0;gy<res;gy++) for(let gx=0;gx<res;gx++){
+      const jx=(vnoise(gx*0.7,gy*0.7,cfg.seed)-0.5)*gap*0.5;
+      const jy=(vnoise(gx*0.7+31.4,gy*0.7+11.1,cfg.seed)-0.5)*gap*0.5;
+      const x=(gx+0.5)*gap+jx, y=(gy+0.5)*gap+jy;
+      const keepP=lerp(1,sstep(densAt(x,y)),cfg.cluster);
+      if(rnd()>keepP) continue;
+      const d=depthAt(x,y);
+      const baseAng=cfg.model==="vortex"?vortexAngle(x,y):flowAngle(x,y);
+      const ang=baseAng+(rnd()-0.5)*(1-cfg.coherence)*Math.PI;
+      const sc=lerp(scaleFar,scaleNear,d), op=lerp(opFar,opNear,d);
+      const cKey=regionColor(x,y,rnd);
+      if(!push(x,y,ang,sc,op,cKey,d)) break;
+    }
+  }
+
+  // depth banding -> layered blur (depth of field) + z-order ----
+  const bands=[[],[],[]];
+  for(const t of tiles) bands[clamp(Math.floor(t.d*3),0,2)].push(t);
+  bands.forEach(b=>b.sort((p,q)=>p.d-q.d));
+  const bandBlur=[cfg.glow+cfg.depthBlur, cfg.glow+cfg.depthBlur*0.45, cfg.glow];
+
+  const tileStr=t=>`<g transform="translate(${t.x.toFixed(1)} ${t.y.toFixed(1)}) rotate(${t.rot.toFixed(1)}) scale(${t.sc.toFixed(3)})" opacity="${t.op.toFixed(3)}" style="mix-blend-mode:${cfg.blend}"><rect x="${(-T/2).toFixed(1)}" y="${(-T/2).toFixed(1)}" width="${T.toFixed(1)}" height="${T.toFixed(1)}" fill="url(#g-${t.color})"/></g>`;
+
+  const grads=colors.map(k=>{const{base,hi}=PALETTE[k];return `<linearGradient id="g-${k}" x1="0.5" y1="0" x2="0.5" y2="1"><stop stop-color="${base}" stop-opacity="0"/><stop offset="0.2" stop-color="${base}"/><stop offset="0.47" stop-color="${hi}"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="0.53" stop-color="${hi}"/><stop offset="0.8" stop-color="${base}"/><stop offset="1" stop-color="${base}" stop-opacity="0"/></linearGradient>`;}).join("");
+  const filters=[0,1,2].map(i=>bandBlur[i]>0?`<filter id="bl${i}" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${bandBlur[i].toFixed(2)}"/></filter>`:"").join("");
+
+  let groups="";
+  bands.forEach((b,i)=>{
+    if(!b.length) return;
+    const f=bandBlur[i]>0?` filter="url(#bl${i})"`:"";
+    groups+=`<g style="isolation:isolate"${f}>${b.map(tileStr).join("")}</g>`;
+  });
+
+  const svg=`<svg viewBox="0 0 ${VIEW} ${VIEW}" xmlns="http://www.w3.org/2000/svg"><defs>${grads}${filters}</defs><rect width="${VIEW}" height="${VIEW}" fill="${cfg.bg}"/>${groups}</svg>`;
+  return {svg,count:tiles.length};
+}
+
+/* ---------- render + sync ---------- */
+const $=id=>document.getElementById(id);
+let lastSVG="";
+function render(){
+  const {svg,count}=buildSVG(state);
+  lastSVG=svg;
+  const doc=new DOMParser().parseFromString(svg,"image/svg+xml");
+  $("stageSvg").innerHTML=doc.documentElement.innerHTML;
+  $("barModel").textContent=state.model;
+  $("barSeed").textContent=state.seed;
+  $("barTiles").textContent=count;
+  $("barPal").textContent=state.colors.join(" · ")||"—";
+  $("reproduce").innerHTML=`<b>recipe</b> · ${state.model} · seed ${state.seed} · coh ${state.coherence} · scale ${state.flowScale} · turb ${state.turb} · dens ${state.density} · clus ${state.cluster} · depth ${state.depth} · trail ${state.trail} · dir ${state.baseRot}° · glow ${state.glow}/${state.depthBlur} · ${state.blend} · [${state.colors.join(", ")}]`;
+}
+
+/* ---------- palette swatches ---------- */
+function buildSwatches(){
+  const wrap=$("swatches"); wrap.innerHTML="";
+  PAL_KEYS.forEach(key=>{
+    const {base,hi}=PALETTE[key];
+    const el=document.createElement("div");
+    el.className="sw"+(state.colors.includes(key)?" on":""); el.title=key;
+    el.innerHTML=`<div class="glow" style="background:radial-gradient(60% 100% at 50% 50%, #fff, ${hi} 30%, ${base} 55%, ${base}00 100%)"></div><div class="dot"></div>`;
+    el.addEventListener("click",()=>{
+      const i=state.colors.indexOf(key);
+      if(i>=0){if(state.colors.length>1) state.colors.splice(i,1);}
+      else state.colors.push(key);
+      buildSwatches(); render();
+    });
+    wrap.appendChild(el);
+  });
+}
+
+/* ---------- controls ---------- */
+function bindRange(id,key,fmt){
+  const el=$(id),out=$(id+"Val");
+  const upd=()=>{const v=parseFloat(el.value);state[key]=v;if(out)out.textContent=fmt?fmt(v):v;};
+  el.addEventListener("input",()=>{upd();render();}); upd();
+}
+bindRange("coherence","coherence",v=>v.toFixed(2));
+bindRange("flowScale","flowScale",v=>v.toFixed(1));
+bindRange("turb","turb",v=>String(v));
+bindRange("density","density",v=>v.toFixed(2));
+bindRange("cluster","cluster",v=>v.toFixed(2));
+bindRange("depth","depth",v=>v.toFixed(2));
+bindRange("trail","trail",v=>v.toFixed(2));
+bindRange("baseRot","baseRot",v=>v+"°");
+bindRange("glow","glow",v=>String(v));
+bindRange("depthBlur","depthBlur",v=>String(v));
+
+$("model").addEventListener("change",e=>{state.model=e.target.value;render();});
+$("blend").addEventListener("change",e=>{state.blend=e.target.value;render();});
+$("bg").addEventListener("input",e=>{state.bg=e.target.value;render();});
+$("seed").addEventListener("input",e=>{const v=parseInt(e.target.value,10);if(!Number.isNaN(v)){state.seed=v;render();}});
+$("randSeed").addEventListener("click",()=>{state.seed=Math.floor(Math.random()*1e6);$("seed").value=state.seed;render();});
+
+/* ---------- agent: language -> field parameters ---------- */
+const SCHEMA_HINT=`Return ONLY a JSON object (no prose, no markdown) with any of these keys:
+{
+ "model":"flow"|"field"|"vortex",   // flow=flocking streams, field=depth map grid, vortex=focal swirl
+ "coherence":0-1,                   // high=beams strongly align (orderly flock), low=chaotic
+ "flowScale":0.6-6,                 // low=wide sweeping currents, high=tight eddies/detail
+ "turb":1-6,                        // field octaves; higher=more intricate swirl
+ "density":0-1,                     // more beams
+ "cluster":0-1,                     // high=clumps with open negative space
+ "depth":0-1,                       // depth contrast; high=strong near/far (big bright vs small hazy)
+ "trail":0-1,                       // stream length (flow model)
+ "baseRot":0-360,                   // overall flow direction, degrees
+ "glow":0-20, "depthBlur":0-34,     // glow=all beams, depthBlur=extra haze on distant beams
+ "blend":"screen"|"lighten"|"plus-lighter"|"normal"|"hard-light",
+ "bg":"#RRGGBB",
+ "colors":[ subset of "magenta","cyan","emerald","amber","coral","indigo","lime" ]
+}
+Only include keys you intend to change. Colours: magenta=pink/purple, cyan=electric blue,
+emerald=green, amber=warm gold, coral=red, indigo=violet-blue, lime=chartreuse.
+"flock/current/flowing"->flow, high coherence. "map/layered/terrain"->field, high depth.
+"vortex/swirl/focal/around"->vortex. "calm/sparse/drifting"->low density, low coherence, high cluster.
+"deep/dramatic depth"->high depth + higher depthBlur. "hazy/dreamy"->higher glow+depthBlur.`;
+
+function applyConfig(o){
+  const num=(v,lo,hi)=>clamp(parseFloat(v),lo,hi);
+  const setR=(k,id,v,fmt)=>{state[k]=v;const el=$(id);if(el)el.value=v;const out=$(id+"Val");if(out)out.textContent=fmt?fmt(v):v;};
+  if(["flow","field","vortex"].includes(o.model)){state.model=o.model;$("model").value=o.model;}
+  if(o.coherence!=null) setR("coherence","coherence",num(o.coherence,0,1),v=>v.toFixed(2));
+  if(o.flowScale!=null) setR("flowScale","flowScale",num(o.flowScale,0.6,6),v=>v.toFixed(1));
+  if(o.turb!=null)      setR("turb","turb",Math.round(num(o.turb,1,6)));
+  if(o.density!=null)   setR("density","density",num(o.density,0,1),v=>v.toFixed(2));
+  if(o.cluster!=null)   setR("cluster","cluster",num(o.cluster,0,1),v=>v.toFixed(2));
+  if(o.depth!=null)     setR("depth","depth",num(o.depth,0,1),v=>v.toFixed(2));
+  if(o.trail!=null)     setR("trail","trail",num(o.trail,0,1),v=>v.toFixed(2));
+  if(o.baseRot!=null)   setR("baseRot","baseRot",Math.round(num(o.baseRot,0,360)),v=>v+"°");
+  if(o.glow!=null)      setR("glow","glow",Math.round(num(o.glow,0,20)));
+  if(o.depthBlur!=null) setR("depthBlur","depthBlur",Math.round(num(o.depthBlur,0,34)));
+  if(["screen","lighten","plus-lighter","normal","hard-light"].includes(o.blend)){state.blend=o.blend;$("blend").value=o.blend;}
+  if(typeof o.bg==="string"&&/^#[0-9a-fA-F]{6}$/.test(o.bg)){state.bg=o.bg;$("bg").value=o.bg;}
+  if(Array.isArray(o.colors)){const v=o.colors.filter(c=>PAL_KEYS.includes(c));if(v.length){state.colors=[...new Set(v)];buildSwatches();}}
+}
+
+async function runAgent(text){
+  const status=$("status"),btn=$("genBtn");
+  status.className="status"; status.textContent="Agent is composing the field…"; btn.disabled=true;
+  if(!$("seedLock").checked){state.seed=Math.floor(Math.random()*1e6);$("seed").value=state.seed;}
+  const userMsg=`Current config: ${JSON.stringify({model:state.model,coherence:state.coherence,flowScale:state.flowScale,turb:state.turb,density:state.density,cluster:state.cluster,depth:state.depth,trail:state.trail,baseRot:state.baseRot,glow:state.glow,depthBlur:state.depthBlur,blend:state.blend,bg:state.bg,colors:state.colors})}\n\nRequest: "${text}"\n\n${SCHEMA_HINT}`;
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:userMsg}]})});
+    if(!res.ok) throw new Error("API "+res.status);
+    const data=await res.json();
+    const raw=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+    const clean=raw.replace(/```json/gi,"").replace(/```/g,"").trim();
+    const s=clean.indexOf("{"),e=clean.lastIndexOf("}");
+    if(s<0||e<0) throw new Error("no JSON in reply");
+    applyConfig(JSON.parse(clean.slice(s,e+1)));
+    render();
+    status.className="status ok"; status.textContent=`Applied. Seed ${state.seed} reproduces this exactly.`;
+  }catch(err){
+    status.className="status err"; status.textContent="Agent unavailable ("+err.message+"). Manual controls still work.";
+  }finally{btn.disabled=false;}
+}
+$("genBtn").addEventListener("click",()=>{const t=$("prompt").value.trim();if(!t){$("status").className="status err";$("status").textContent="Describe the field first.";return;}runAgent(t);});
+$("examples").addEventListener("click",e=>{if(e.target.classList.contains("chip")){$("prompt").value=e.target.textContent;runAgent(e.target.textContent);}});
+
+/* ---------- export ---------- */
+function download(name,blob){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+async function copy(text,btn){try{await navigator.clipboard.writeText(text);flash(btn,"Copied");}catch{flash(btn,"Copy failed");}}
+function flash(btn,msg){const old=btn.textContent;btn.textContent=msg;setTimeout(()=>btn.textContent=old,1100);}
+$("copySvg").addEventListener("click",e=>copy(lastSVG,e.target));
+$("dlSvg").addEventListener("click",()=>download(`beam-field-${state.model}-seed${state.seed}.svg`,new Blob([lastSVG],{type:"image/svg+xml"})));
+$("copyCfg").addEventListener("click",e=>copy(JSON.stringify({seed:state.seed,...state},null,2),e.target));
+$("dlPng").addEventListener("click",()=>{
+  const scale=2,px=VIEW*scale,img=new Image();
+  img.onload=()=>{const cv=document.createElement("canvas");cv.width=px;cv.height=px;cv.getContext("2d").drawImage(img,0,0,px,px);cv.toBlob(b=>download(`beam-field-${state.model}-seed${state.seed}.png`,b),"image/png");};
+  img.onerror=()=>alert("PNG rasterization failed in this browser. Use Download SVG instead.");
+  img.src="data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(lastSVG)));
+});
+
+/* ---------- init ---------- */
+buildSwatches();
+render();
+</script>
+</body>
+</html>

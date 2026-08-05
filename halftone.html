@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halftone Studio</title>
+<style>
+  :root{
+    --ink:#f4cccc;          /* pink foreground */
+    --bg:#14272a;           /* deep teal canvas */
+    --panel:#10202300;
+    --line:#2d4d4c;
+    --line2:#1c3639;
+    --txt:#e7d6d6;
+    --mut:#7fa6a4;
+    --hi:#f4cccc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#0d1a1c;color:var(--txt);
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;-webkit-font-smoothing:antialiased}
+  .wrap{display:grid;grid-template-columns:320px 1fr;min-height:100vh}
+  @media(max-width:860px){.wrap{grid-template-columns:1fr}}
+
+  /* ── rail ── */
+  .rail{background:#0b1719;border-right:1px solid var(--line2);
+    padding:20px 18px 40px;overflow-y:auto;max-height:100vh}
+  @media(max-width:860px){.rail{max-height:none;border-right:none;border-bottom:1px solid var(--line2)}}
+  .brand{display:flex;align-items:baseline;gap:8px;margin:0 0 4px}
+  .brand b{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+  .brand span{font-size:10px;color:var(--mut);letter-spacing:.18em}
+  .sub{font-size:10.5px;color:var(--mut);line-height:1.5;margin:0 0 18px}
+
+  .group{margin:0 0 16px;padding:0 0 16px;border-bottom:1px solid var(--line2)}
+  .group:last-child{border-bottom:none}
+  .glabel{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mut);margin:0 0 10px}
+
+  .drop{border:1.5px dashed var(--line);border-radius:2px;padding:18px 12px;text-align:center;
+    font-size:11px;color:var(--mut);cursor:pointer;transition:.15s;line-height:1.5}
+  .drop:hover,.drop.over{border-color:var(--ink);color:var(--ink);background:#0f2023}
+  .drop b{color:var(--txt)}
+
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .chip{flex:1 1 0;min-width:54px;background:#0f2023;border:1px solid var(--line);color:var(--txt);
+    padding:8px 4px;font:inherit;font-size:18px;cursor:pointer;border-radius:2px;transition:.12s;line-height:1}
+  .chip:hover{border-color:var(--ink)}
+  .chip.on{border-color:var(--ink);background:#15292c;box-shadow:inset 0 0 0 1px var(--ink)}
+
+  .seg{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+  .seg button{flex:1;background:#0f2023;border:none;color:var(--mut);padding:8px 4px;
+    font:inherit;font-size:10px;letter-spacing:.06em;cursor:pointer;text-transform:uppercase;transition:.12s}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--ink);color:#11272a;font-weight:600}
+
+  .field{margin:0 0 11px}
+  .field:last-child{margin-bottom:0}
+  .frow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+  .frow label{font-size:10.5px;color:var(--txt);letter-spacing:.03em}
+  .frow output{font-size:10.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line);
+    border-radius:2px;outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;
+    background:var(--ink);cursor:pointer;border:2px solid #0b1719;box-shadow:0 0 0 1px var(--ink)}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--ink);
+    border:2px solid #0b1719;cursor:pointer}
+
+  .toggle{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;
+    color:var(--txt);cursor:pointer;padding:3px 0}
+  .toggle .sw{width:30px;height:16px;border-radius:9px;background:var(--line);position:relative;transition:.15s;flex:none}
+  .toggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;
+    background:#0b1719;transition:.15s}
+  .toggle.on .sw{background:var(--ink)}
+  .toggle.on .sw::after{left:16px;background:#11272a}
+
+  .colors{display:flex;gap:10px}
+  .swrap{flex:1}
+  .swrap label{font-size:10px;color:var(--mut);display:block;margin-bottom:5px}
+  .swatch{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:2px;padding:4px 6px}
+  .swatch input[type=color]{-webkit-appearance:none;appearance:none;width:22px;height:22px;border:none;
+    padding:0;background:none;cursor:pointer;border-radius:2px;overflow:hidden;flex:none}
+  .swatch input[type=color]::-webkit-color-swatch{border:none;border-radius:2px}
+  .swatch input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  .swatch input[type=text]{flex:1;min-width:0;background:none;border:none;color:var(--txt);
+    font:inherit;font-size:10px;outline:none;text-transform:uppercase}
+
+  .actions{display:flex;gap:8px}
+  .btn{flex:1;background:var(--ink);color:#11272a;border:none;padding:11px 6px;font:inherit;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;border-radius:2px;font-weight:600;transition:.12s}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+
+  /* ── stage ── */
+  .stage{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:32px;gap:14px;background:
+      radial-gradient(circle at 50% 40%, #112225 0%, #0d1a1c 70%)}
+  .canvas-frame{position:relative;max-width:100%;line-height:0}
+  canvas{max-width:100%;max-height:78vh;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);display:block;cursor:pointer}
+  .toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(13,26,28,.92);
+    color:var(--ink);border:1px solid var(--ink);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+    padding:7px 14px;border-radius:2px;opacity:0;pointer-events:none;transition:opacity .18s;z-index:5;white-space:nowrap}
+  .toast.show{opacity:1}
+  .meta{font-size:10px;color:var(--mut);letter-spacing:.08em;display:flex;gap:18px}
+  .meta b{color:var(--ink);font-weight:500}
+
+  /* ── saved creations ── */
+  .save-row{display:flex;gap:8px;margin-bottom:10px}
+  .save-row input{flex:1;min-width:0;background:#0f2023;border:1px solid var(--line);color:var(--txt);
+    font:inherit;font-size:11px;padding:8px 10px;outline:none;border-radius:2px}
+  .save-row input:focus{border-color:var(--ink)}
+  .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .gcard{position:relative;border:1px solid var(--line2);border-radius:2px;overflow:hidden;cursor:pointer;
+    background:#0f2023;transition:.12s}
+  .gcard:hover{border-color:var(--ink)}
+  .gcard img{width:100%;height:50px;object-fit:cover;display:block;background:#000}
+  .gcard .gname{font-size:8.5px;color:var(--txt);padding:4px 5px;line-height:1.3;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .gcard .gdel{position:absolute;top:3px;right:3px;width:17px;height:17px;border-radius:50%;
+    background:rgba(13,26,28,.88);color:var(--ink);border:none;font-size:12px;line-height:1;cursor:pointer;
+    display:none;padding:0}
+  .gcard:hover .gdel{display:block}
+  .gempty{font-size:10px;color:var(--mut);line-height:1.5;grid-column:1/-1}
+  .minibtns{display:flex;gap:8px;margin-top:10px}
+  .minibtns button{flex:1;background:none;border:1px solid var(--line);color:var(--mut);font:inherit;font-size:9px;
+    letter-spacing:.08em;text-transform:uppercase;padding:7px 4px;border-radius:2px;cursor:pointer;transition:.12s}
+  .minibtns button:hover{border-color:var(--ink);color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ───────────────────── control rail ───────────────────── -->
+  <aside class="rail">
+    <div class="brand"><b>Halftone</b><span>STUDIO · v6</span></div>
+    <p class="sub">Linear-light sampling · perceptual luma · error-diffusion dithering. Drop an image or pick a subject.</p>
+
+    <div class="group">
+      <div class="glabel">Source</div>
+      <div id="drop" class="drop"><b>Drop, browse, or paste</b><br>⌘/Ctrl+V an image · PNG keeps its halo
+        <input id="file" type="file" accept="image/*" hidden></div>
+      <button class="btn ghost" id="pasteBtn" style="margin-top:8px;font-size:9px;padding:9px;letter-spacing:.12em">Paste from clipboard</button>
+      <div class="chips" id="chips">
+        <button class="chip on" data-emoji="🧠" title="Brain">🧠</button>
+        <button class="chip" data-emoji="🤖" title="Robot">🤖</button>
+        <button class="chip" data-emoji="⚙️" title="Gear">⚙️</button>
+        <button class="chip" data-emoji="🪐" title="Planet">🪐</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Render mode</div>
+      <div class="seg" id="mode">
+        <button data-m="ordered" class="on">Dots · grid</button>
+        <button data-m="diffuse">Dots · diffuse</button>
+        <button data-m="lines">Lines</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Grid</div>
+      <div class="field"><div class="frow"><label>Cell pitch</label><output id="oPitch">7 px</output></div>
+        <input type="range" id="pitch" min="3" max="56" step="1" value="7"></div>
+      <div class="field"><div class="frow"><label>Cell gap</label><output id="oGap">1 px</output></div>
+        <input type="range" id="gap" min="0" max="6" step="1" value="1"></div>
+      <div class="field" id="dotShapeField"><div class="frow"><label>Dot roundness</label><output id="oRound">0%</output></div>
+        <input type="range" id="round" min="0" max="100" step="5" value="0"></div>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Tone</div>
+      <div class="field"><div class="frow"><label>Brightness</label><output id="oBright">0</output></div>
+        <input type="range" id="bright" min="-0.5" max="0.5" step="0.01" value="0"></div>
+      <div class="field"><div class="frow"><label>Contrast</label><output id="oContr">1.00×</output></div>
+        <input type="range" id="contr" min="0.3" max="2.5" step="0.05" value="1"></div>
+      <div class="field"><div class="frow"><label>Midtones (γ)</label><output id="oGamma">1.00</output></div>
+        <input type="range" id="gamma" min="0.3" max="3" step="0.05" value="1"></div>
+      <div class="field"><div class="frow"><label>Black point</label><output id="oBlack">0%</output></div>
+        <input type="range" id="black" min="0" max="0.6" step="0.01" value="0"></div>
+      <div class="field"><div class="frow"><label>White point</label><output id="oWhite">100%</output></div>
+        <input type="range" id="white" min="0.4" max="1" step="0.01" value="1"></div>
+      <label class="toggle" id="invertT"><span>Invert ink</span><span class="sw"></span></label>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Subject &amp; halo</div>
+      <label class="toggle" id="solidT"><span>Solid subject (no interior dither)</span><span class="sw"></span></label>
+      <label class="toggle on" id="haloT"><span>Dithered halo</span><span class="sw"></span></label>
+      <div class="field" style="margin-top:8px"><div class="frow"><label>Halo radius</label><output id="oHalo">30</output></div>
+        <input type="range" id="halo" min="0" max="80" step="1" value="30"></div>
+      <div class="field"><div class="frow"><label>Halo falloff</label><output id="oFall">1.7</output></div>
+        <input type="range" id="fall" min="0.6" max="4" step="0.1" value="1.7"></div>
+    </div>
+
+    <div class="group" id="lineGroup" style="display:none">
+      <div class="glabel">Line segments</div>
+      <div class="seg" id="orient" style="margin-bottom:11px">
+        <button data-o="v" class="on">Vertical</button>
+        <button data-o="h">Horizontal</button>
+      </div>
+      <div class="field"><div class="frow"><label>Line weight</label><output id="oLw">3 px</output></div>
+        <input type="range" id="lw" min="1" max="8" step="1" value="3"></div>
+      <label class="toggle on" id="connectT"><span>Connect bright runs</span><span class="sw"></span></label>
+      <label class="toggle" id="varT"><span>Vary weight by tone</span><span class="sw"></span></label>
+      <label class="toggle" id="brandWT"><span>Brand weight tiers · longer = thinner</span><span class="sw"></span></label>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Color</div>
+      <div class="colors">
+        <div class="swrap"><label>Ink</label><div class="swatch">
+          <input type="color" id="inkC" value="#f4cccc"><input type="text" id="inkT" value="#F4CCCC" maxlength="7"></div></div>
+        <div class="swrap"><label>Ground</label><div class="swatch">
+          <input type="color" id="bgC" value="#14272a"><input type="text" id="bgT" value="#14272A" maxlength="7"></div></div>
+      </div>
+      <button class="btn ghost" id="brandPal" style="margin-top:10px;font-size:9px;padding:8px;letter-spacing:.12em">yasp brand palette</button>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Output size · long edge</div>
+      <div class="field"><div class="frow"><label>Resolution</label><output id="oSize">1200 px</output></div>
+        <input type="range" id="size" min="600" max="2000" step="100" value="1200"></div>
+      <div class="actions">
+        <button class="btn" id="dlPng">PNG</button>
+        <button class="btn ghost" id="dlSvg">SVG</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Saved creations</div>
+      <div class="save-row">
+        <input type="text" id="saveName" placeholder="Name this image…">
+        <button class="btn" id="saveBtn" style="flex:none;padding:0 14px">Save</button>
+      </div>
+      <div class="gallery" id="gallery"></div>
+      <div class="minibtns">
+        <button id="exportLib">Export library</button>
+        <button id="importLib">Import</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ───────────────────── stage ───────────────────── -->
+  <main class="stage">
+    <div class="canvas-frame"><canvas id="cv" title="Click to copy SVG"></canvas><div class="toast" id="toast">SVG copied</div></div>
+    <div class="meta"><span>grid <b id="mGrid">–</b></span><span>cells lit <b id="mLit">–</b></span><span>mode <b id="mMode">grid</b></span></div>
+  </main>
+</div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════
+   Halftone Studio — high-fidelity image → dithered halftone
+   Pipeline: source → linear-light area average → perceptual luma →
+             tone curve → subject mask + distance-field halo →
+             dither (ordered / Floyd–Steinberg / line segments) →
+             canvas + SVG
+   ════════════════════════════════════════════════════════════════ */
+
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const srgbToLin = c => { c/=255; return c <= 0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); };
+const linToPerc = L => Math.pow(clamp01(L), 1/2.2);   // linear → perceptual lightness
+
+// 8×8 Bayer ordered-dither matrix (normalised 0..1)
+const BAYER = [
+  [ 0,32, 8,40, 2,34,10,42],[48,16,56,24,50,18,58,26],
+  [12,44, 4,36,14,46, 6,38],[60,28,52,20,62,30,54,22],
+  [ 3,35,11,43, 1,33, 9,41],[51,19,59,27,49,17,57,25],
+  [15,47, 7,39,13,45, 5,37],[63,31,55,23,61,29,53,21]
+].map(r => r.map(v => (v + 0.5) / 64));
+
+// ── live state ──
+const S = {
+  mode:'ordered', pitch:7, gap:1, round:0,
+  bright:0, contr:1, gamma:1, black:0, white:1, invert:false,
+  solid:false, halo:true, haloR:30, fall:1.7,
+  lw:3, connect:true, vary:false, orient:'v', brandW:false,
+  ink:'#f4cccc', bg:'#14272a', size:1200
+};
+
+let srcCanvas = null;          // current source (always has alpha)
+let srcHasAlpha = true;
+let currentSrcType = 'emoji';  // 'emoji' | 'image'
+let currentEmoji = '🧠';       // which built-in form is active
+
+/* ── build a source canvas from an emoji (transparent ground) ── */
+function emojiSource(emoji){
+  const N = 512, c = document.createElement('canvas');
+  c.width = c.height = N;
+  const x = c.getContext('2d');
+  x.clearRect(0,0,N,N);
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = (N*0.78) + 'px "Apple Color Emoji","Noto Color Emoji","Segoe UI Emoji",sans-serif';
+  x.fillText(emoji, N/2, N/2 + N*0.04);
+  return c;
+}
+
+/* ── load an uploaded <img> into a source canvas, detect alpha ── */
+function imageSource(img){
+  const maxN = 900;
+  let w = img.naturalWidth, h = img.naturalHeight;
+  const s = Math.min(1, maxN / Math.max(w,h));
+  w = Math.max(1, Math.round(w*s)); h = Math.max(1, Math.round(h*s));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.drawImage(img, 0, 0, w, h);
+  // alpha detection
+  const d = x.getImageData(0,0,w,h).data;
+  let transparent = false;
+  for(let i=3;i<d.length;i+=4){ if(d[i] < 250){ transparent = true; break; } }
+  srcHasAlpha = transparent;
+  return c;
+}
+
+/* ── linear-light area-average the source onto the cell grid ──
+   Supersamples the source to (cols·SS × rows·SS) with the browser's
+   high-quality scaler, then averages each SS×SS block in LINEAR light.
+   Returns {cols,rows, lum:Float32(linear), alpha:Float32}.            */
+function sample(cols, rows){
+  const SS = 4;
+  const sw = cols*SS, sh = rows*SS;
+  const c = document.createElement('canvas');
+  c.width = sw; c.height = sh;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.clearRect(0,0,sw,sh);
+  // contain the source within the grid's aspect
+  const sa = srcCanvas.width/srcCanvas.height, ga = cols/rows;
+  let dw, dh;
+  if(sa > ga){ dw = sw; dh = sw/sa; } else { dh = sh; dw = sh*sa; }
+  x.drawImage(srcCanvas, (sw-dw)/2, (sh-dh)/2, dw, dh);
+
+  const data = x.getImageData(0,0,sw,sh).data;
+  const lum = new Float32Array(cols*rows);
+  const alpha = new Float32Array(cols*rows);
+  for(let cy=0; cy<rows; cy++){
+    for(let cx=0; cx<cols; cx++){
+      let L=0, A=0;
+      for(let sy=0; sy<SS; sy++){
+        const py = cy*SS+sy;
+        for(let sx=0; sx<SS; sx++){
+          const px = cx*SS+sx;
+          const i = (py*sw+px)*4;
+          const a = data[i+3]/255;
+          // linear luminance, weighted toward opaque pixels
+          const lin = 0.2126*srgbToLin(data[i]) + 0.7152*srgbToLin(data[i+1]) + 0.0722*srgbToLin(data[i+2]);
+          L += lin*a; A += a;
+        }
+      }
+      const idx = cy*cols+cx;
+      alpha[idx] = A/(SS*SS);
+      lum[idx]   = A > 0 ? L/A : 0;     // mean over covered area
+    }
+  }
+  return {cols, rows, lum, alpha};
+}
+
+/* ── tone curve: perceptual lightness → ink density 0..1 ── */
+function tone(L){
+  let x = (L - S.black) / Math.max(1e-4, (S.white - S.black));
+  x = clamp01(x);
+  x = Math.pow(x, S.gamma);
+  x = (x - 0.5) * S.contr + 0.5 + S.bright;
+  return clamp01(x);
+}
+
+/* ── chamfer distance transform (cells, from subject edge outward) ── */
+function distanceField(mask, cols, rows){
+  const INF = 1e9, d = new Float32Array(cols*rows);
+  for(let i=0;i<d.length;i++) d[i] = mask[i] ? 0 : INF;
+  const D1=1, D2=1.4142;
+  for(let y=0;y<rows;y++) for(let x=0;x<cols;x++){
+    const i=y*cols+x; let v=d[i];
+    if(x>0)            v=Math.min(v,d[i-1]+D1);
+    if(y>0)            v=Math.min(v,d[i-cols]+D1);
+    if(x>0&&y>0)       v=Math.min(v,d[i-cols-1]+D2);
+    if(x<cols-1&&y>0)  v=Math.min(v,d[i-cols+1]+D2);
+    d[i]=v;
+  }
+  for(let y=rows-1;y>=0;y--) for(let x=cols-1;x>=0;x--){
+    const i=y*cols+x; let v=d[i];
+    if(x<cols-1)         v=Math.min(v,d[i+1]+D1);
+    if(y<rows-1)         v=Math.min(v,d[i+cols]+D1);
+    if(x<cols-1&&y<rows-1)v=Math.min(v,d[i+cols+1]+D2);
+    if(x>0&&y<rows-1)    v=Math.min(v,d[i+cols-1]+D2);
+    d[i]=v;
+  }
+  return d;
+}
+
+/* ── build the per-cell ink field (subject tone + halo) ── */
+function inkField(samp){
+  const {cols,rows,lum,alpha} = samp;
+  const N = cols*rows;
+  const ink = new Float32Array(N);
+  const mask = new Uint8Array(N);
+  const hasSubject = srcHasAlpha;
+  for(let i=0;i<N;i++) mask[i] = hasSubject ? (alpha[i] > 0.5 ? 1 : 0) : 1;
+
+  const dist = (hasSubject && S.halo && S.haloR>0) ? distanceField(mask, cols, rows) : null;
+
+  for(let i=0;i<N;i++){
+    if(mask[i]){
+      ink[i] = S.solid ? 1 : tone(linToPerc(lum[i]));
+    } else if(dist){
+      const t = 1 - dist[i]/S.haloR;
+      ink[i] = t > 0 ? Math.pow(t, S.fall) : 0;
+    } else ink[i] = 0;
+  }
+  if(S.invert) for(let i=0;i<N;i++) if(mask[i]) ink[i] = 1 - ink[i];
+  return {ink, mask};
+}
+
+/* ── dithering → array of filled cells (with optional intensity) ── */
+function dither(ink, cols, rows){
+  const out = [];                       // {x,y,v}
+  if(S.mode === 'diffuse'){
+    const buf = Float32Array.from(ink);
+    for(let y=0;y<rows;y++) for(let x=0;x<cols;x++){
+      const i=y*cols+x;
+      const old = clamp01(buf[i]);
+      const nv = old > 0.5 ? 1 : 0;
+      const err = old - nv;
+      if(x+1<cols)               buf[i+1]      += err*7/16;
+      if(x-1>=0 && y+1<rows)     buf[i+cols-1] += err*3/16;
+      if(y+1<rows)               buf[i+cols]   += err*5/16;
+      if(x+1<cols && y+1<rows)   buf[i+cols+1] += err*1/16;
+      if(nv) out.push({x,y,v:1});
+    }
+  } else { // ordered (Bayer)
+    for(let y=0;y<rows;y++) for(let x=0;x<cols;x++){
+      const i=y*cols+x;
+      if(ink[i] > BAYER[y&7][x&7]) out.push({x,y,v:1});
+    }
+  }
+  return out;
+}
+
+/* ════════════ RENDER ════════════ */
+let lastSVG = '';
+function render(){
+  if(!srcCanvas) return;
+  const pitch = S.pitch, gap = Math.min(S.gap, pitch-1), cell = pitch - gap;
+
+  // canvas dims from source aspect, long edge = S.size, snapped to pitch
+  const sa = srcCanvas.width/srcCanvas.height;
+  let W,H;
+  if(sa >= 1){ W = S.size; H = Math.round(S.size/sa); }
+  else       { H = S.size; W = Math.round(S.size*sa); }
+  const cols = Math.max(2, Math.floor(W/pitch));
+  const rows = Math.max(2, Math.floor(H/pitch));
+  W = cols*pitch; H = rows*pitch;
+  cv.width = W; cv.height = H;
+
+  const samp = sample(cols, rows);
+  const {ink, mask} = inkField(samp);
+
+  // paint ground
+  ctx.fillStyle = S.bg; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = S.ink;
+
+  let lit = 0;
+  const svg = [`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
+               `<rect width="${W}" height="${H}" fill="${S.bg}"/>`, `<g fill="${S.ink}">`];
+
+  if(S.mode === 'lines'){
+    const lw = S.lw;
+    // brand weight tiers — thickness as a fraction of pitch; the yasp grammar
+    // is "longer = thinner", so brighter/denser runs resolve to fine lines.
+    const brandT = v => { const f = v>=0.75 ? 0.0555 : v>=0.4 ? 0.111 : 0.222; return Math.max(1, Math.round(pitch*f)); };
+    const weight = v => S.brandW ? brandT(v) : (S.vary ? Math.max(1, Math.round(lw*(0.5+0.5*v))) : lw);
+
+    if(S.orient === 'h'){
+      // ── horizontal segments; length tracks ink, runs merge when bright ──
+      for(let y=0;y<rows;y++){
+        let x=0;
+        while(x<cols){
+          const v=ink[y*cols+x];
+          if(v < 0.06){ x++; continue; }
+          if(S.connect && v > 0.5){
+            let x2=x, sum=0, n=0;
+            while(x2<cols && ink[y*cols+x2] > 0.5){ sum+=ink[y*cols+x2]; n++; x2++; }
+            const t=weight(sum/n), px=x*pitch, w=(x2-x)*pitch-gap, yy=y*pitch+(pitch-t)/2;
+            ctx.fillRect(px,yy,w,t); svg.push(`<rect x="${px}" y="${yy.toFixed(1)}" width="${w}" height="${t}"/>`);
+            lit+=(x2-x); x=x2;
+          } else {
+            const w=Math.max(1,Math.round(cell*(0.25+0.75*v))), t=weight(v);
+            const px=x*pitch+(cell-w)/2, yy=y*pitch+(pitch-t)/2;
+            ctx.fillRect(px,yy,w,t); svg.push(`<rect x="${px.toFixed(1)}" y="${yy.toFixed(1)}" width="${w}" height="${t}"/>`);
+            lit++; x++;
+          }
+        }
+      }
+    } else {
+      // ── vertical segments (brand default); length tracks ink, runs merge ──
+      for(let x=0;x<cols;x++){
+        let y=0;
+        while(y<rows){
+          const v=ink[y*cols+x];
+          if(v < 0.06){ y++; continue; }
+          if(S.connect && v > 0.5){
+            let y2=y, sum=0, n=0;
+            while(y2<rows && ink[y2*cols+x] > 0.5){ sum+=ink[y2*cols+x]; n++; y2++; }
+            const t=weight(sum/n), py=y*pitch, hgt=(y2-y)*pitch-gap, xx=x*pitch+(pitch-t)/2;
+            ctx.fillRect(xx,py,t,hgt); svg.push(`<rect x="${xx.toFixed(1)}" y="${py}" width="${t}" height="${hgt}"/>`);
+            lit+=(y2-y); y=y2;
+          } else {
+            const hgt=Math.max(1,Math.round(cell*(0.25+0.75*v))), t=weight(v);
+            const xx=x*pitch+(cell-t)/2, py=y*pitch+(cell-hgt)/2;
+            ctx.fillRect(xx,py,t,hgt); svg.push(`<rect x="${xx.toFixed(1)}" y="${py.toFixed(1)}" width="${t}" height="${hgt}"/>`);
+            lit++; y++;
+          }
+        }
+      }
+    }
+  } else {
+    const cells = dither(ink, cols, rows);
+    lit = cells.length;
+    const r = S.round/100 * (cell/2);
+    for(const {x,y} of cells){
+      const px = x*pitch, py = y*pitch;
+      if(r > 0.5){
+        ctx.beginPath(); roundRect(ctx, px, py, cell, cell, r); ctx.fill();
+        svg.push(`<rect x="${px}" y="${py}" width="${cell}" height="${cell}" rx="${r.toFixed(1)}"/>`);
+      } else {
+        ctx.fillRect(px, py, cell, cell);
+        svg.push(`<rect x="${px}" y="${py}" width="${cell}" height="${cell}"/>`);
+      }
+    }
+  }
+  svg.push('</g></svg>');
+  lastSVG = svg.join('');
+
+  $('mGrid').textContent = cols+'×'+rows;
+  $('mLit').textContent  = lit.toLocaleString();
+  $('mMode').textContent = S.mode==='ordered'?'grid':S.mode==='diffuse'?'diffuse':'lines';
+}
+function roundRect(c,x,y,w,h,r){c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+/* ════════════ WIRING ════════════ */
+const debounce = (fn,ms=60)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};};
+const draw = debounce(render, 50);
+
+// sliders
+function slider(id, key, fmt){
+  const el=$(id), out=$('o'+id.charAt(0).toUpperCase()+id.slice(1));
+  const upd=()=>{S[key]=parseFloat(el.value); if(out&&fmt) out.textContent=fmt(S[key]); draw();};
+  el.addEventListener('input',upd); upd();
+}
+slider('pitch','pitch',v=>v+' px');
+slider('gap','gap',v=>v+' px');
+slider('round','round',v=>v+'%');
+slider('bright','bright',v=>v.toFixed(2));
+slider('contr','contr',v=>v.toFixed(2)+'×');
+slider('gamma','gamma',v=>v.toFixed(2));
+slider('black','black',v=>Math.round(v*100)+'%');
+slider('white','white',v=>Math.round(v*100)+'%');
+slider('halo','haloR',v=>v);
+slider('fall','fall',v=>v.toFixed(1));
+slider('lw','lw',v=>v+' px');
+slider('size','size',v=>v+' px');
+
+// toggles
+function toggle(id,key,after){
+  const el=$(id);
+  el.addEventListener('click',()=>{S[key]=!S[key];el.classList.toggle('on',S[key]);after&&after();draw();});
+}
+toggle('invertT','invert');
+toggle('solidT','solid');
+toggle('haloT','halo');
+toggle('connectT','connect');
+toggle('varT','vary');
+toggle('brandWT','brandW');
+
+// line orientation segmented control
+$('orient').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+  $('orient').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); S.orient=b.dataset.o; draw();
+}));
+
+// mode segmented control
+$('mode').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+  $('mode').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); S.mode=b.dataset.m;
+  $('lineGroup').style.display = S.mode==='lines'?'block':'none';
+  $('dotShapeField').style.display = S.mode==='lines'?'none':'block';
+  draw();
+}));
+
+// colours
+function colour(cId,tId,key){
+  const c=$(cId), t=$(tId);
+  const set=v=>{S[key]=v;document.documentElement.style.setProperty(key==='ink'?'--ink':'--bg', v);draw();};
+  c.addEventListener('input',()=>{t.value=c.value.toUpperCase();set(c.value);});
+  t.addEventListener('change',()=>{if(/^#[0-9a-fA-F]{6}$/.test(t.value)){c.value=t.value;set(t.value);}});
+}
+colour('inkC','inkT','ink');
+colour('bgC','bgT','bg');
+
+// brand palette preset  sage on near-black
+$('brandPal').addEventListener('click',()=>{
+  const ink='#C6DDD3', bg='#212121';
+  $('inkC').value=ink; $('inkT').value=ink; S.ink=ink; document.documentElement.style.setProperty('--ink',ink);
+  $('bgC').value=bg; $('bgT').value=bg; S.bg=bg; document.documentElement.style.setProperty('--bg',bg);
+  draw();
+});
+
+// emoji chips
+$('chips').querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{
+  $('chips').querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  ch.classList.add('on');
+  srcCanvas = emojiSource(ch.dataset.emoji); srcHasAlpha = true;
+  currentSrcType = 'emoji'; currentEmoji = ch.dataset.emoji;
+  $('haloT').classList.add('on'); S.halo=true;
+  render();
+}));
+
+// file upload + drag/drop
+const drop=$('drop'), file=$('file');
+drop.addEventListener('click',()=>file.click());
+file.addEventListener('change',e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); });
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) loadFile(f); });
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>e.preventDefault());
+
+function loadFile(f){
+  const r=new FileReader();
+  r.onload=()=>{ const img=new Image(); img.onload=()=>{
+    srcCanvas=imageSource(img);
+    currentSrcType='image'; currentEmoji=null;
+    $('chips').querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+    if(!srcHasAlpha){ $('haloT').classList.remove('on'); S.halo=false; }
+    render();
+  }; img.src=r.result; };
+  r.readAsDataURL(f);
+}
+
+// paste an image with ⌘/Ctrl+V anywhere on the page
+window.addEventListener('paste', e=>{
+  const items = e.clipboardData && e.clipboardData.items;
+  if(!items) return;
+  for(const it of items){
+    if(it.type && it.type.startsWith('image/')){
+      const blob = it.getAsFile();
+      if(blob){ e.preventDefault(); loadFile(blob); toast('Image pasted'); }
+      return;
+    }
+  }
+});
+// clickable paste, via the async clipboard API
+async function pasteFromClipboard(){
+  try{
+    const items = await navigator.clipboard.read();
+    for(const it of items){
+      const type = it.types.find(t=>t.startsWith('image/'));
+      if(type){ const blob = await it.getType(type); loadFile(blob); toast('Image pasted'); return; }
+    }
+    toast('No image on clipboard');
+  }catch(e){ toast('Press ⌘/Ctrl+V to paste'); }
+}
+$('pasteBtn').addEventListener('click', pasteFromClipboard);
+
+// downloads
+$('dlPng').addEventListener('click',()=>{
+  cv.toBlob(b=>saveBlob(b,'halftone.png'),'image/png');
+});
+$('dlSvg').addEventListener('click',()=>{
+  saveBlob(new Blob([lastSVG],{type:'image/svg+xml'}),'halftone.svg');
+});
+
+// click the rendered image to copy its SVG to the clipboard
+let toastTimer;
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1300);
+}
+async function copySVG(){
+  if(!lastSVG) return;
+  try{
+    await navigator.clipboard.writeText(lastSVG);
+    toast('SVG copied');
+  }catch(e){
+    const ta=document.createElement('textarea');
+    ta.value=lastSVG; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    let ok=false; try{ ok=document.execCommand('copy'); }catch(_){}
+    ta.remove();
+    toast(ok?'SVG copied':'Copy blocked — use the SVG button');
+  }
+}
+cv.addEventListener('click', copySVG);
+function saveBlob(b,name){
+  const u=URL.createObjectURL(b), a=document.createElement('a');
+  a.href=u; a.download=name; document.body.appendChild(a); a.click();
+  a.remove(); setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+
+/* ════════════ SAVED CREATIONS (persists across sessions) ════════════ */
+// Works in the Claude artifact runtime (window.storage) and, if opened as a
+// standalone file, falls back to the browser's own localStorage.
+const HAS_WS = !!(window.storage && window.storage.get);
+const store = {
+  async get(k){ try{ if(HAS_WS){ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }
+    const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } },
+  async set(k,v){ const s=JSON.stringify(v); try{ if(HAS_WS) await window.storage.set(k,s);
+    else localStorage.setItem(k,s); }catch(e){ console.error('save failed',e); } },
+  async del(k){ try{ if(HAS_WS) await window.storage.delete(k); else localStorage.removeItem(k); }catch(e){} }
+};
+const escapeHtml = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// compact re-encode of the source for storage (PNG if it has transparency, else JPEG)
+function sourceDataURL(){
+  const max=700, w=srcCanvas.width, h=srcCanvas.height, sc=Math.min(1, max/Math.max(w,h));
+  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(w*sc)); c.height=Math.max(1,Math.round(h*sc));
+  const x=c.getContext('2d'); x.imageSmoothingQuality='high'; x.drawImage(srcCanvas,0,0,c.width,c.height);
+  return srcHasAlpha ? c.toDataURL('image/png') : c.toDataURL('image/jpeg',0.85);
+}
+function thumbDataURL(){
+  const ar=cv.width/cv.height, c=document.createElement('canvas');
+  c.width=96; c.height=Math.max(1,Math.round(96/ar));
+  c.getContext('2d').drawImage(cv,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',0.6);
+}
+
+async function saveCreation(){
+  if(!srcCanvas) return;
+  const name=($('saveName').value||'Untitled').trim() || 'Untitled';
+  const id='c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const entry={ id, name, ts:Date.now(), thumb:thumbDataURL(),
+                settings:{...S}, srcType:currentSrcType, emoji:currentEmoji };
+  if(currentSrcType==='image') await store.set('hf:src:'+id, sourceDataURL());
+  const idx=(await store.get('hf:index'))||[];
+  idx.unshift(entry);
+  await store.set('hf:index', idx);
+  $('saveName').value='';
+  flash($('saveBtn'),'Saved');
+  refreshGallery();
+}
+
+async function openCreation(id){
+  const idx=(await store.get('hf:index'))||[];
+  const e=idx.find(x=>x.id===id); if(!e) return;
+  if(e.srcType==='image'){
+    const url=await store.get('hf:src:'+e.id);
+    if(url){ const img=new Image(); img.onload=()=>{
+      srcCanvas=imageSource(img); currentSrcType='image'; currentEmoji=null;
+      $('chips').querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+      applyState(e.settings);
+    }; img.src=url; return; }
+  }
+  currentEmoji=e.emoji||'🧠'; currentSrcType='emoji';
+  srcCanvas=emojiSource(currentEmoji); srcHasAlpha=true;
+  $('chips').querySelectorAll('.chip').forEach(x=>x.classList.toggle('on', x.dataset.emoji===currentEmoji));
+  applyState(e.settings);
+}
+
+async function deleteCreation(id){
+  let idx=(await store.get('hf:index'))||[];
+  idx=idx.filter(x=>x.id!==id);
+  await store.set('hf:index', idx);
+  await store.del('hf:src:'+id);
+  refreshGallery();
+}
+
+async function refreshGallery(){
+  const idx=(await store.get('hf:index'))||[];
+  const g=$('gallery');
+  if(!idx.length){ g.innerHTML='<div class="gempty">Saved images appear here. Each keeps its source and every setting, so you can reopen it exactly.</div>'; return; }
+  g.innerHTML='';
+  for(const e of idx){
+    const card=document.createElement('div'); card.className='gcard'; card.title=e.name;
+    card.innerHTML=`<img src="${e.thumb}" alt=""><div class="gname">${escapeHtml(e.name)}</div><button class="gdel" title="Delete">×</button>`;
+    card.addEventListener('click', ()=>openCreation(e.id));
+    card.querySelector('.gdel').addEventListener('click', ev=>{ ev.stopPropagation(); deleteCreation(e.id); });
+    g.appendChild(card);
+  }
+}
+
+async function exportLib(){
+  const idx=(await store.get('hf:index'))||[];
+  const out={ index:idx, sources:{} };
+  for(const e of idx){ if(e.srcType==='image'){ const u=await store.get('hf:src:'+e.id); if(u) out.sources[e.id]=u; } }
+  saveBlob(new Blob([JSON.stringify(out)],{type:'application/json'}), 'halftone-library.json');
+}
+async function importLib(file){
+  let data; try{ data=JSON.parse(await file.text()); }catch(e){ return; }
+  if(!data || !Array.isArray(data.index)) return;
+  const cur=(await store.get('hf:index'))||[];
+  const have=new Set(cur.map(x=>x.id));
+  for(const e of data.index){ if(have.has(e.id)) continue; cur.unshift(e);
+    if(data.sources && data.sources[e.id]) await store.set('hf:src:'+e.id, data.sources[e.id]); }
+  await store.set('hf:index', cur);
+  refreshGallery();
+}
+
+// re-apply a saved settings object to every control, then render
+function applyState(s){
+  const sl={pitch:'pitch',gap:'gap',round:'round',bright:'bright',contr:'contr',gamma:'gamma',
+            black:'black',white:'white',halo:'haloR',fall:'fall',lw:'lw',size:'size'};
+  for(const id in sl){ const el=$(id), key=sl[id]; if(el && s[key]!==undefined){ el.value=s[key]; el.dispatchEvent(new Event('input')); } }
+  const tg={invertT:'invert',solidT:'solid',haloT:'halo',connectT:'connect',varT:'vary',brandWT:'brandW'};
+  for(const id in tg){ const key=tg[id]; S[key]=!!s[key]; $(id).classList.toggle('on', S[key]); }
+  S.mode=s.mode||'ordered';
+  $('mode').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.m===S.mode));
+  $('lineGroup').style.display = S.mode==='lines'?'block':'none';
+  $('dotShapeField').style.display = S.mode==='lines'?'none':'block';
+  S.orient=s.orient||'v';
+  $('orient').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.o===S.orient));
+  if(s.ink){ S.ink=s.ink; $('inkC').value=s.ink; $('inkT').value=s.ink.toUpperCase(); document.documentElement.style.setProperty('--ink',s.ink); }
+  if(s.bg){  S.bg=s.bg;  $('bgC').value=s.bg;  $('bgT').value=s.bg.toUpperCase();  document.documentElement.style.setProperty('--bg',s.bg); }
+  render();
+}
+
+function flash(btn,txt){ const o=btn.textContent; btn.textContent=txt; setTimeout(()=>btn.textContent=o,900); }
+
+$('saveBtn').addEventListener('click', saveCreation);
+$('saveName').addEventListener('keydown', e=>{ if(e.key==='Enter') saveCreation(); });
+$('exportLib').addEventListener('click', exportLib);
+$('importLib').addEventListener('click', ()=>$('importFile').click());
+$('importFile').addEventListener('change', e=>{ if(e.target.files[0]) importLib(e.target.files[0]); e.target.value=''; });
+
+// boot
+srcCanvas = emojiSource('🧠');
+render();
+refreshGallery();
+</script>
+</body>
+</html>

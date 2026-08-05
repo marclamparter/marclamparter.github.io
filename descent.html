@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THE DESCENT · Diagram Generator</title>
+<style>
+:root{--bg:#0B0C0E;--edge:#C9C9C2;--mesh:#E6E6DF;--dot:#DEDED6;--muted:#7C7B72;--panel:#16171B;--panel2:#101114;--line:#2A2C31;--txt:#CFCEC6;--accent:#2C30E6;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:var(--mono)}
+.app{min-height:100%;display:flex;flex-direction:column}
+.toolbar{display:flex;gap:11px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.05em}
+.brand{font-weight:600}.brand small{color:var(--muted);font-weight:400;letter-spacing:.14em;margin-left:8px}
+.sp{flex:1}label{display:inline-flex;gap:6px;align-items:center;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;font-size:10.5px}
+input[type=number]{width:64px}input[type=number],select{background:#0c0d10;border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:12px;padding:6px 7px}
+input[type=range]{accent-color:var(--accent);width:74px}input[type=checkbox]{accent-color:var(--accent)}
+button{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;background:transparent;color:var(--txt);border:1px solid var(--line);padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--txt)}button.pri{border-color:var(--accent);color:#c9caff}button.pri:hover{background:var(--accent);color:#fff}
+.meshbar{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);background:#0c0d10}
+.meshbar .ttl{color:var(--muted);letter-spacing:.14em;text-transform:uppercase;font-size:10px;align-self:center;margin-right:4px}
+.step{display:flex;flex-direction:column;gap:3px}
+.step span{font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.step select{font-size:11px;padding:5px 6px;max-width:150px}
+.stage{flex:1;display:flex;align-items:center;justify-content:center;padding:20px}
+.stage svg{display:block;width:auto;height:auto;max-width:94vw;max-height:84vh;cursor:pointer}
+.hint{font-size:10px;color:var(--muted);padding:0 16px 10px;letter-spacing:.05em}
+</style></head><body>
+<div class="app">
+<div class="toolbar">
+<span class="brand">yasp<small>THE DESCENT · DIAGRAM GENERATOR</small></span><span class="sp"></span>
+<label>Diagram <select id="scene"></select></label>
+<label>Seed <input id="seed" type="number" value="7"></label><button id="rnd">↻</button>
+<label>Accent <select id="accent"><option value="#2C30E6">Yasp Blue</option><option value="#93A487">Sage</option><option value="#C98A4B">Copper</option><option value="#F0E8D8">Cream</option></select></label>
+<label>Rotate <input id="az" type="range" min="0" max="70" value="30"></label>
+<label>Tilt <input id="el" type="range" min="8" max="40" value="16"></label>
+<label>Line <input id="lw" type="range" min="0.4" max="2.6" step="0.1" value="1"></label>
+<label>Text <input id="ts" type="range" min="0.6" max="2" step="0.1" value="1"></label>
+<label>Gap <input id="lg" type="range" min="0.6" max="2.4" step="0.1" value="1"></label>
+<label>Dist <input id="ld" type="range" min="0" max="500" step="2" value="30"></label>
+<label>Spread <input id="spread" type="range" min="0.4" max="2.5" step="0.05" value="1"></label>
+<label><input id="glass" type="checkbox" checked> Glass</label>
+<label><input id="labels" type="checkbox" checked> Labels</label>
+<button id="svg">SVG</button><button id="png" class="pri">PNG</button>
+</div>
+<div class="meshbar" id="meshbar"><span class="ttl">Surface per step</span></div>
+<div class="stage" id="stage"></div>
+<div class="hint">Each step's surface mesh is swappable above — that's the variant control. Click the image to open the copy panel, then Cmd/Ctrl-C.</div></div>
+<script>
+// yasp — THE DESCENT. Diagrams as descending isometric stacks; each step wears a swappable MESH.
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
+function hsl2hex(h,sa,l){sa/=100;l/=100;h=((h%360)+360)%360;const a=sa*Math.min(l,1-l);const k=n=>(n+h/30)%12;const fch=n=>{const c=l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return Math.round(255*c);};const R=fch(0),G=fch(8),B=fch(4);return '#'+((1<<24)+(R<<16)+(G<<8)+B).toString(16).slice(1);}
+
+// mesh library: id -> display name + concept use (drives defaults + UI dropdowns)
+const MESH_DEFS=[
+  ['point-cloud','POINT CLOUD','models · sampled data'],
+  ['ridgelines','RIDGELINES','profiling · runs'],
+  ['woven-field','WOVEN FIELD','generic surface'],
+  ['jagged-peaks','JAGGED PEAKS','candidates · search'],
+  ['terraces','TERRACES','compiled · deterministic'],
+  ['cache-plane','CACHE PLANE','validated memory'],
+  ['cache-tiles','KERNEL TILES','stored kernels'],
+  ['needle-field','NEEDLE FIELD','agentic · latency'],
+  ['convergent-funnel','CONVERGENT FUNNEL','evaluate · race'],
+  ['graph-nodes','GRAPH NODES','decomposition'],
+  ['systolic-array','SYSTOLIC ARRAY','codegen · compute'],
+  ['columnar','COLUMNAR','deterministic strata'],
+  ['folded-strata','FOLDED STRATA','circulation · agentic'],
+  ['cross-hatch','CROSS-HATCH','density · load'],
+  ['halftone-dots','HALFTONE DOTS','magnitude field'],
+  ['blueprint-dash','BLUEPRINT DASH','planned · not real'],
+  ['aperture-gate','APERTURE GATE','verification'],
+  ['ripple','RIPPLE','event propagating'],
+  ['polar-weave','POLAR WEAVE','dispatch · cycles'],
+  ['shard-cracks','SHARD CRACKS','fragmentation'],
+  ['hbm-stack','HBM STACK','memory · stacked'],
+  ['fanout-delta','FANOUT DELTA','fan-out'],
+  ['engine-block','ENGINE BLOCK','one binary'],
+  ['silicon-die','SILICON DIE','hardware target'],
+  ['vendor-silos','VENDOR SILOS','fragmentation · locked SDKs'],
+  ['four-efforts','FOUR EFFORTS','same model × N targets'],
+  ['lock-in','LOCK-IN','vendor ecosystem lock'],
+  ['profile-trace','PROFILE TRACE','bottleneck ops'],
+  ['ir-lowering','IR LOWERING','graph → yasp IR'],
+  ['agent-swarm','AGENT SWARM','yasp.agent orchestrator'],
+  ['candidate-race','CANDIDATE RACE','generate + race on silicon'],
+  ['layer-fusion','LAYER FUSION','fuse ops'],
+  ['precision-shift','PRECISION SHIFT','FP32 → FP16'],
+  ['algebraic-rewrite','ALGEBRAIC REWRITE','48GB eliminated · 6.25x'],
+  ['codegen-emitter','CODEGEN EMITTER','yasp.codegen · CUDA/PTX'],
+  ['binary-assemble','BINARY ASSEMBLE','kernels → one binary'],
+  ['flash-to-device','FLASH TO DEVICE','.engine flashed · exits'],
+  ['allclose-check','ALLCLOSE CHECK','torch.allclose · verified'],
+  ['audit-source','AUDIT SOURCE','readable CUDA/PTX · certifiable'],
+  ['kerneldb-flywheel','KERNELDB FLYWHEEL','compounding moat'],
+  ['cache-hit-miss','CACHE HIT / MISS','lookup · instant hit'],
+  ['speedup-bars','SPEEDUP BARS','before / after latency'],
+  ['cost-curve','COST CURVE','cost per query drops'],
+  ['independent-layer','INDEPENDENT LAYER','the layer that exits']
+];
+const MESH_LIST=MESH_DEFS.map(m=>({id:m[0],name:m[1],use:m[2]}));
+
+// diagrams: ordered steps, each with a default mesh (swappable)
+const SCENES={
+  platformless:{name:'PLATFORMLESS',steps:[
+    {label:'MODEL',sub:'ANY PYTORCH',mesh:'point-cloud'},
+    {label:'GAIA · OPTIMIZE',sub:'AGENTS ITERATE',mesh:'folded-strata'},
+    {label:'KRONOS · DEPLOY',sub:'GUIDED PIPELINE',mesh:'terraces'},
+    {label:'KERNELDB',sub:'SHARED CACHE',mesh:'cache-plane'},
+    {label:'SILICON',sub:'ANY TARGET · yasp EXITS',mesh:'silicon-die'}]},
+  fragmentation:{name:'THE PROBLEM',steps:[
+    {label:'ONE MODEL',sub:'ANY PYTORCH',mesh:'point-cloud'},
+    {label:'FRAGMENTED',sub:'INCOMPATIBLE TOOLCHAINS',mesh:'shard-cracks'},
+    {label:'BARRIERS',sub:'SDK · OPS · RUNTIME · BLACK BOX',mesh:'blueprint-dash'},
+    {label:'SILICON',sub:'UNREACHABLE',mesh:'silicon-die'}]},
+  kronos:{name:'KRONOS',steps:[
+    {label:'MODEL',sub:'ANY PYTORCH',mesh:'point-cloud'},
+    {label:'LOWER · IR',sub:'yasp INTERMEDIATE REPRESENTATION',mesh:'ir-lowering'},
+    {label:'GRAPH OPT · REWRITES',sub:'ALGEBRAIC SIMPLIFICATION',mesh:'algebraic-rewrite'},
+    {label:'yasp.codegen',sub:'CUDA / PTX KERNELS · AI AGENTS',mesh:'codegen-emitter'},
+    {label:'ASSEMBLE · VALIDATE',sub:'SINGLE BINARY · ON TARGET',mesh:'binary-assemble'},
+    {label:'.ENGINE',sub:'ONE BINARY',mesh:'engine-block'},
+    {label:'NVIDIA',sub:'FLASH · NOTHING LEFT RESIDENT',mesh:'silicon-die'}]},
+  gaia:{name:'GAIA',steps:[
+    {label:'MODEL',sub:'ANY PYTORCH',mesh:'point-cloud'},
+    {label:'PROFILE',sub:'END-TO-END ON TARGET · BOTTLENECK OPS',mesh:'profile-trace'},
+    {label:'GENERATE',sub:'AGENTS: REWRITE · FUSE · PRECISION · ALGEBRAIC',mesh:'agent-swarm'},
+    {label:'EVALUATE',sub:'RUN ON SILICON · vs PYTORCH REF · torch.allclose',mesh:'candidate-race'},
+    {label:'STORE',sub:'WINNERS → KERNELDB · COMPOUNDS',mesh:'kerneldb-flywheel'},
+    {label:'ANY VENDOR',sub:'NVIDIA CUDA · AMD HIP · AWS TRITON',mesh:'silicon-die'}]},
+  together:{name:'KRONOS + GAIA',steps:[
+    {label:'MODEL',sub:'ANY PYTORCH',mesh:'point-cloud'},
+    {label:'GAIA · OPTIMIZE',sub:'AGENTS ITERATE',mesh:'folded-strata'},
+    {label:'KRONOS · DEPLOY',sub:'GUIDED PIPELINE',mesh:'terraces'},
+    {label:'KERNELDB',sub:'SAME AGENTS',mesh:'cache-plane'},
+    {label:'SILICON',sub:'DIFFERENT OUTPUT',mesh:'silicon-die'}]},
+  pipeline:{name:'THE PIPELINE',steps:[
+    {label:'MODEL',sub:'ANY PYTORCH',mesh:'point-cloud'},
+    {label:'PROFILE',sub:'TRACE · BOTTLENECK OPS',mesh:'profile-trace'},
+    {label:'LOOKUP',sub:'KERNELDB · HIT = INSTANT',mesh:'cache-hit-miss'},
+    {label:'GENERATE',sub:'AGENTS WRITE KERNEL CANDIDATES',mesh:'agent-swarm'},
+    {label:'EVALUATE',sub:'RACE ON SILICON vs PYTORCH REF',mesh:'candidate-race'},
+    {label:'STORE',sub:'WINNERS → KERNELDB',mesh:'kerneldb-flywheel'},
+    {label:'SILICON',sub:'ANY TARGET',mesh:'silicon-die'}]},
+  proof:{name:'PROVEN',steps:[
+    {label:'MODELS',sub:'CUSTOMERS',mesh:'point-cloud'},
+    {label:'yasp VERIFY',sub:'torch.allclose',mesh:'aperture-gate'},
+    {label:'EVALUATE',sub:'CORRECTNESS PRESERVED',mesh:'convergent-funnel'},
+    {label:'REAL SILICON',sub:'VERIFIED',mesh:'silicon-die'}]},
+  matrix:{name:'THE MATRIX',steps:[
+    {label:'M MODELS',sub:'ANY FRAMEWORK',mesh:'point-cloud'},
+    {label:'INDEPENDENT LAYER',sub:'yasp',mesh:'woven-field'},
+    {label:'N TARGETS',sub:'ANY SILICON',mesh:'silicon-die'}]}
+};
+const SCENE_LIST=Object.keys(SCENES);
+const SCENE_NAME=Object.fromEntries(SCENE_LIST.map(k=>[k,SCENES[k].name]));
+
+function build(opts){
+  opts=opts||{};
+  const scene=opts.scene||'pipeline';
+  const SC=SCENES[scene]||SCENES.pipeline;
+  const steps=SC.steps.map((st,i)=>({...st, mesh:(opts.stepMeshes&&opts.stepMeshes[i])?opts.stepMeshes[i]:st.mesh}));
+  const seed=opts.seed||7, rand=mulberry32(seed);
+  const accent=opts.accent||'#2C30E6', labels=opts.labels!==false, glass=opts.glass!==false, dieTop=opts.dieTop!==false;
+  const lw=opts.lineWeight==null?1:opts.lineWeight, ts=opts.textScale==null?1:opts.textScale, lg=opts.labelGap==null?1:opts.labelGap, ld=opts.labelDist==null?30:opts.labelDist;
+  const az=(opts.az==null?30:opts.az)*Math.PI/180, el=(opts.el==null?16:opts.el)*Math.PI/180, dist=opts.dist||2.75;
+  const LW=1180,Ht=1480;
+  const spread=opts.spread==null?1:opts.spread;
+  const zTop=1.95*spread, n=steps.length;
+  const zAt=i=>zTop*(1-i/(n-1));
+
+  const T=[0,0,zTop/2],UP=[0,0,1];
+  const E=[T[0]+dist*Math.sin(az)*Math.cos(el),T[1]-dist*Math.cos(az)*Math.cos(el),T[2]+dist*Math.sin(el)];
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],norm=a=>{const m=Math.hypot(...a);return[a[0]/m,a[1]/m,a[2]/m];};
+  const fwd=norm(sub(T,E)),right=norm(cross(fwd,UP)),up=cross(right,fwd);
+  const raw=p=>{const r=[p[0]-E[0],p[1]-E[1],p[2]-E[2]];const cz=dot(r,fwd);return[dot(r,right)/cz,dot(r,up)/cz,cz];};
+  const WX=x=>x-0.5,WY=y=>y-0.5;
+  const cs=[];for(const z of[0,zTop])for(const x of[0,1])for(const y of[0,1])cs.push(raw([WX(x),WY(y),z]));
+  let mnX=1e9,mxX=-1e9,mnY=1e9,mxY=-1e9;cs.forEach(r=>{mnX=Math.min(mnX,r[0]);mxX=Math.max(mxX,r[0]);mnY=Math.min(mnY,r[1]);mxY=Math.max(mxY,r[1]);});
+  const mar=70,s0=Math.min((LW-2*mar)/(mxX-mnX),(Ht-2*mar)/(mxY-mnY)),cX=(mnX+mxX)/2,cY=(mnY+mxY)/2;
+  const P=(x,y,z)=>{const r=raw([WX(x),WY(y),z]);return[LW/2+(r[0]-cX)*s0,Ht/2-(r[1]-cY)*s0,r[2]];};
+  const f=n=>Math.round(n*10)/10;
+  const M=0.06;
+  let W=LW;
+  if(labels){let maxR=0;for(let i=0;i<n;i++){const st=steps[i];const p=P(1-M,0.5,zAt(i));const lx=p[0]+ld;
+    const wT=(st.label||'').length*14*ts*0.74, wS=(st.sub||'').length*9.5*ts*0.76;maxR=Math.max(maxR,lx+Math.max(wT,wS));}
+    W=Math.max(LW,Math.ceil(maxR+32));}
+  const parts=[];const push=x=>parts.push(x);
+  push(`<rect x="0" y="0" width="${W}" height="${Ht}" fill="var(--bg)"/>`);
+
+  const fbm=(x,y,o)=>{let s=0,a=0.5,fr=1,nn=0;for(let k=0;k<3;k++){s+=a*(0.5+0.5*Math.sin(x*fr*1.7+3+o)*Math.cos(y*fr*1.9+o*1.3));nn+=a;fr*=2;a*=0.5;}return s/nn;};
+  const poly=(pts,fill,stroke,sw,op)=>`<polygon points="${pts.map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="${fill||'none'}"${stroke?` stroke="${stroke}" stroke-width="${f((sw||1)*lw)}"`:''}${op!=null?` stroke-opacity="${op}"`:''}/>`;
+  const line=(a,b,st,sw,op,dash)=>`<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="${st}" stroke-width="${f((sw||1)*lw)}" stroke-opacity="${op==null?1:op}"${dash?` stroke-dasharray="${dash}"`:''}/>`;
+  const gp=(x,y,z)=>{const p=P(x,y,z);return f(p[0])+','+f(p[1]);};
+  function ebox(x0,x1,y0,y1,z,h,topCol){
+    const C=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]];
+    const bot=C.map(c=>P(c[0],c[1],z)),top=C.map(c=>P(c[0],c[1],z+h));
+    let s='';const faces=[];for(let i=0;i<4;i++){const j=(i+1)%4;faces.push({q:[bot[i],bot[j],top[j],top[i]],near:(bot[i][1]+bot[j][1])/2});}
+    faces.sort((u,v)=>u.near-v.near);
+    faces.forEach((fc,k)=>{s+=poly(fc.q,(k<2)?'var(--panel2)':'var(--panel)','var(--edge)',0.9,0.55);});
+    s+=poly(top,topCol||'none','var(--edge)',1,0.8);
+    return {s,top,ctr:P((x0+x1)/2,(y0+y1)/2,z+h)};
+  }
+  // camera-facing extruded cell: always draws the 2 visible side faces + top (no missing sides at any angle)
+  function raise(gx0,gx1,gy0,gy1,zb,h,topcol,topop){const zt=zb+h,cxm=(gx0+gx1)/2,cym=(gy0+gy1)/2;let o='';
+    const c00=P(gx0,gy0,zb),c10=P(gx1,gy0,zb),c11=P(gx1,gy1,zb),c01=P(gx0,gy1,zb);
+    const t00=P(gx0,gy0,zt),t10=P(gx1,gy0,zt),t11=P(gx1,gy1,zt),t01=P(gx0,gy1,zt);
+    if(E[0]>cxm)o+=poly([c10,c11,t11,t10],'var(--panel2)','var(--edge)',0.5,0.4);else o+=poly([c00,c01,t01,t00],'var(--panel2)','var(--edge)',0.5,0.4);
+    if(E[1]>cym)o+=poly([c01,c11,t11,t01],'var(--panel)','var(--edge)',0.5,0.4);else o+=poly([c00,c10,t10,t00],'var(--panel)','var(--edge)',0.5,0.4);
+    o+=poly([t00,t10,t11,t01],topcol||accent,'var(--edge)',0.6,topop==null?0.85:topop);return o;}
+
+  function frame(z,i){const c=[P(M,M,z),P(1-M,M,z),P(1-M,1-M,z),P(M,1-M,z)];let s='';
+    if(glass){const fade=0.4+0.5*(i/(n-1));
+      s+=`<polygon points="${c.map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="var(--mesh)" fill-opacity="0.03" stroke="var(--edge)" stroke-width="${f(1*lw)}" stroke-opacity="${f(0.5*fade)}"/>`;}
+    else s+=poly(c,'none','var(--edge)',1,0.22);
+    for(const p of c)s+=`<circle cx="${f(p[0])}" cy="${f(p[1])}" r="2" fill="none" stroke="var(--edge)" stroke-width="${f(0.8*lw)}" stroke-opacity="0.4"/>`;return s;}
+
+  // ---------- MESH renderers (each draws a surface treatment at height z) ----------
+  function r_pointcloud(z){let s='';const N=40;
+    for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const x=M+(1-2*M)*i/N,y=M+(1-2*M)*j/N;
+      const dip=0.30*Math.exp(-(((x-0.5)**2+(y-0.5)**2)/0.05));
+      const zz=z+0.34+(fbm(x*2.2+21,y*2.2+15,seed*0.01)-0.5)*0.10-dip;const p=P(x,y,zz);
+      const dep=(i+j)/(2*N);const op=f(clamp(0.3+0.6*dep+(rand()-0.5)*0.25,0.18,0.95));
+      s+=`<circle cx="${f(p[0])}" cy="${f(p[1])}" r="${rand()<0.14?1.7:1.15}" fill="var(--dot)" fill-opacity="${op}"/>`;}
+    return s;}
+  function r_woven(z,amp,off){amp=amp||0.28;off=off==null?3:off;const G=30;const mz=(x,y)=>z+0.30+(fbm(x*2.4+off,y*2.4+off*2,seed*0.01)-0.5)*amp+0.22*Math.exp(-(((x-0.5)**2+(y-0.5)**2)/0.06));
+    const mp=[];for(let i=0;i<=G;i++){mp[i]=[];for(let j=0;j<=G;j++)mp[i][j]=P(M+(1-2*M)*i/G,M+(1-2*M)*j/G,mz((i/G),(j/G)));}
+    let s=`<g fill="none" stroke="var(--mesh)" stroke-width="${f(0.7*lw)}" stroke-linecap="round">`;
+    const mo=(i,j)=>0.3+0.5*((i+j)/(2*G));
+    for(let i=0;i<=G;i++){let d=`M${f(mp[i][0][0])},${f(mp[i][0][1])}`;for(let j=1;j<=G;j++)d+=`L${f(mp[i][j][0])},${f(mp[i][j][1])}`;s+=`<path d="${d}" stroke-opacity="${f(mo(i,G/2))}"/>`;}
+    for(let j=0;j<=G;j++){let d=`M${f(mp[0][j][0])},${f(mp[0][j][1])}`;for(let i=1;i<=G;i++)d+=`L${f(mp[i][j][0])},${f(mp[i][j][1])}`;s+=`<path d="${d}" stroke-opacity="${f(mo(G/2,j))}"/>`;}
+    return s+'</g>';}
+  function r_ridgelines(z){let s='';const L=22;
+    for(let k=0;k<=L;k++){const y=M+(1-2*M)*k/L;let d='';for(let i=0;i<=40;i++){const x=M+(1-2*M)*i/40;const zz=z+0.05+0.06*Math.sin(x*9+seed)*Math.cos(y*4);const p=P(x,y,zz);d+=(i?'L':'M')+f(p[0])+','+f(p[1]);}
+      const emph=(k===Math.floor(L*0.5));s+=`<path d="${d}" fill="none" stroke="${emph?accent:'var(--mesh)'}" stroke-width="${f((emph?1.3:0.6)*lw)}" stroke-opacity="${emph?0.95:0.4}"/>`;}
+    return s;}
+  function r_graph(z){let s='';const pts=[];const K=26;const rr=mulberry32(seed*17+1);
+    for(let i=0;i<K;i++){const x=M+rr()*(1-2*M),y=M+rr()*(1-2*M);pts.push([x,y]);}
+    for(let i=0;i<K;i++){const a=pts[i];const d=pts.map((b,j)=>[j,(a[0]-b[0])**2+(a[1]-b[1])**2]).sort((u,v)=>u[1]-v[1]).slice(1,3);
+      for(const[j] of d){const b=pts[j];s+=line(P(a[0],a[1],z+0.02),P(b[0],b[1],z+0.02),'var(--mesh)',0.6,0.3);}}
+    for(const p of pts){const q=P(p[0],p[1],z+0.02);s+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="1.8" fill="var(--dot)" fill-opacity="0.8"/>`;}
+    return s;}
+  function r_cachetiles(z){let s='';const C=12,R=12;const rr=mulberry32(seed*7+13);
+    const cells=[];for(let i=0;i<C;i++)for(let j=0;j<R;j++)cells.push({i,j,fl:rr()<0.38});
+    cells.sort((a,b)=>(a.i+a.j)-(b.i+b.j)); // back->front so raised tiles occlude correctly
+    for(const c of cells){const x0=M+(1-2*M)*c.i/C,x1=M+(1-2*M)*(c.i+0.82)/C,y0=M+(1-2*M)*c.j/R,y1=M+(1-2*M)*(c.j+0.82)/R;
+      if(c.fl)s+=raise(x0,x1,y0,y1,z+0.015,0.035,accent,0.75);
+      else s+=poly([P(x0,y0,z+0.015),P(x1,y0,z+0.015),P(x1,y1,z+0.015),P(x0,y1,z+0.015)],'none','var(--edge)',0.6,0.28);}
+    return s;}
+  function r_cacheplane(z){let s='';const G=10;
+    for(let i=0;i<=G;i++){s+=line(P(M,M+(1-2*M)*i/G,z+0.02),P(1-M,M+(1-2*M)*i/G,z+0.02),'var(--edge)',0.5,0.3);s+=line(P(M+(1-2*M)*i/G,M,z+0.02),P(M+(1-2*M)*i/G,1-M,z+0.02),'var(--edge)',0.5,0.3);}
+    const rr=mulberry32(seed*9+4);for(let i=0;i<=G;i++)for(let j=0;j<=G;j++){const q=P(M+(1-2*M)*i/G,M+(1-2*M)*j/G,z+0.02);const on=rr()<0.5;s+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${on?1.6:1.0}" fill="${on?accent:'var(--dot)'}" fill-opacity="${on?0.8:0.5}"/>`;}
+    return s;}
+  function r_needle(z){let s='';const K=30;const rr=mulberry32(seed*3+5);
+    for(let i=0;i<K;i++){const x=M+rr()*(1-2*M),y=M+rr()*(1-2*M);const h=0.04+rr()*0.09;const base=P(x,y,z),tip=P(x,y,z+h);
+      const win=rr()<0.16;s+=line(base,tip,win?accent:'var(--mesh)',win?1.3:0.7,win?0.95:0.4);
+      s+=`<circle cx="${f(tip[0])}" cy="${f(tip[1])}" r="${win?2.2:1.3}" fill="${win?accent:'var(--dot)'}" fill-opacity="${win?1:0.6}"/>`;}
+    return s;}
+  function r_funnel(z){let s='';const rr=mulberry32(seed*5+2);const cx=0.5,cy=0.5;
+    for(let i=0;i<26;i++){const a=rr()*6.283,rad=0.12+rr()*0.32;const x=cx+Math.cos(a)*rad,y=cy+Math.sin(a)*rad*0.9;
+      const pass=rr()<0.3;s+=line(P(x,y,z+0.04+rr()*0.06),P(cx,cy,z+0.10),pass?accent:'var(--mesh)',pass?1.1:0.6,pass?0.9:0.28);
+      const pp=gp(x,y,z+0.04).split(',');s+=`<circle cx="${pp[0]}" cy="${pp[1]}" r="1.2" fill="var(--dot)" fill-opacity="0.5"/>`;}
+    const t=P(cx,cy,z+0.10);s+=`<circle cx="${f(t[0])}" cy="${f(t[1])}" r="3" fill="${accent}"/>`;return s;}
+  function r_terraces(z){let s='';const T=7;
+    for(let k=0;k<T;k++){const inset=M+(0.5-M)*k/T;const zz=z+0.02+k*(glass?0.02:0.035);
+      const c=[P(inset,inset,zz),P(1-inset,inset,zz),P(1-inset,1-inset,zz),P(inset,1-inset,zz)];
+      s+=poly(c,'none','var(--mesh)',k===T-1?1.2:0.7,k===T-1?0.85:0.45);}
+    for(let i=1;i<10;i++){const y=M+(1-2*M)*i/10;s+=line(P(M,y,z+0.02),P(1-M,y,z+0.02),accent,0.5,0.25);}
+    return s;}
+  function r_systolic(z){let s='';const G=8;
+    for(let i=0;i<G;i++)for(let j=0;j<G;j++){const x0=M+(1-2*M)*(i+0.12)/G,x1=M+(1-2*M)*(i+0.88)/G,y0=M+(1-2*M)*(j+0.12)/G,y1=M+(1-2*M)*(j+0.88)/G;
+      s+=poly([P(x0,y0,z+0.02),P(x1,y0,z+0.02),P(x1,y1,z+0.02),P(x0,y1,z+0.02)],'none','var(--mesh)',0.5,0.35);}
+    for(let j=0;j<G;j++){const y=M+(1-2*M)*(j+0.5)/G;s+=line(P(M,y,z+0.03),P(1-M,y,z+0.03),accent,0.5,0.2);}
+    return s;}
+  function r_columnar(z){let s='';const G=9;
+    for(let i=0;i<G;i++)for(let j=0;j<G;j++){const x=M+(1-2*M)*(i+0.5)/G,y=M+(1-2*M)*(j+0.5)/G;const h=0.03+0.06*fbm(x*3+seed,y*3,1);s+=line(P(x,y,z+0.01),P(x,y,z+0.01+h),'var(--mesh)',0.9,0.5);}
+    return s;}
+  function r_folded(z){let s='';const L=11;
+    for(let k=0;k<=L;k++){const y=M+(1-2*M)*k/L;let d='';for(let i=0;i<=40;i++){const x=M+(1-2*M)*i/40;const zz=z+0.05+0.05*Math.sin(x*6+y*4+seed)+0.03*Math.cos(x*3-y*5);const p=P(x,y,zz);d+=(i?'L':'M')+f(p[0])+','+f(p[1]);}
+      s+=`<path d="${d}" fill="none" stroke="var(--mesh)" stroke-width="${f(0.7*lw)}" stroke-opacity="0.45"/>`;}
+    let d='';for(let i=0;i<=48;i++){const t=i/48,x=0.5+0.32*Math.cos(t*6.283),y=0.5+0.32*Math.sin(t*6.283)*0.9;const p=P(x,y,z+0.12);d+=(i?'L':'M')+f(p[0])+','+f(p[1]);}
+    s+=`<path d="${d}" fill="none" stroke="${accent}" stroke-width="${f(1.1*lw)}" stroke-opacity="0.8"/>`;
+    return s;}
+  function r_crosshatch(z){let s='';for(let c=2*M;c<=2*(1-M);c+=0.06){const x1=Math.max(M,c-(1-M)),y1=c-x1,x2=Math.min(1-M,c-M),y2=c-x2;s+=line(P(x1,y1,z+0.02),P(x2,y2,z+0.02),'var(--mesh)',0.5,0.3);}
+    for(let c=-(1-2*M);c<=(1-2*M);c+=0.06){const x1=Math.max(M,c+M),y1=x1-c,x2=Math.min(1-M,c+(1-M)),y2=x2-c;s+=line(P(x1,y1,z+0.02),P(x2,y2,z+0.02),'var(--mesh)',0.5,0.3);}
+    return s;}
+  function r_halftone(z){let s='';const G=22;for(let i=0;i<=G;i++)for(let j=0;j<=G;j++){const x=M+(1-2*M)*i/G,y=M+(1-2*M)*j/G;const d=Math.hypot(x-0.5,y-0.5);const r=clamp(2.3*(1-d*1.7),0.15,2.4);if(r>0.3){const q=P(x,y,z+0.02);s+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(r)}" fill="var(--dot)" fill-opacity="0.7"/>`;}}return s;}
+  function r_blueprint(z){let s='';const G=10;for(let i=0;i<=G;i++){s+=line(P(M,M+(1-2*M)*i/G,z+0.02),P(1-M,M+(1-2*M)*i/G,z+0.02),'var(--edge)',0.6,0.35,'4 4');s+=line(P(M+(1-2*M)*i/G,M,z+0.02),P(M+(1-2*M)*i/G,1-M,z+0.02),'var(--edge)',0.6,0.35,'4 4');}return s;}
+  function r_aperture(z){let s='';const cx=0.5,cy=0.5;for(let k=1;k<=6;k++){const rad=0.06*k;const pts=[];for(let a=0;a<=48;a++){const an=a/48*6.283;pts.push(P(cx+Math.cos(an)*rad,cy+Math.sin(an)*rad*0.9,z+0.02));}s+=`<polyline points="${pts.map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="var(--mesh)" stroke-width="${f(0.6*lw)}" stroke-opacity="0.4"/>`;}
+    const c=P(cx,cy,z+0.03);s+=`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="5" fill="none" stroke="${accent}" stroke-width="${f(1.3*lw)}"/>`;s+=`<path d="M${f(c[0]-4)},${f(c[1])} l3,3.5 l6,-8" fill="none" stroke="${accent}" stroke-width="${f(1.6*lw)}" stroke-linecap="round" stroke-linejoin="round"/>`;return s;}
+  function r_ripple(z){let s='';const cx=0.5,cy=0.5;for(let k=1;k<=8;k++){const rad=0.05*k;const pts=[];for(let a=0;a<=48;a++){const an=a/48*6.283;pts.push(P(cx+Math.cos(an)*rad,cy+Math.sin(an)*rad*0.9,z+0.02));}s+=`<polyline points="${pts.map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="var(--mesh)" stroke-width="${f(0.6*lw)}" stroke-opacity="${f(Math.max(0.1,0.5-k*0.04))}"/>`;}return s;}
+  function r_polar(z){let s='';const cx=0.5,cy=0.5;for(let k=1;k<=5;k++){const rad=0.07*k;const pts=[];for(let a=0;a<=48;a++){const an=a/48*6.283;pts.push(P(cx+Math.cos(an)*rad,cy+Math.sin(an)*rad*0.9,z+0.02));}s+=`<polyline points="${pts.map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="var(--mesh)" stroke-width="0.5" stroke-opacity="0.35"/>`;}
+    for(let a=0;a<12;a++){const an=a/12*6.283;s+=line(P(cx,cy,z+0.02),P(cx+Math.cos(an)*0.35,cy+Math.sin(an)*0.35*0.9,z+0.02),'var(--mesh)',0.5,0.3);}return s;}
+  function r_shard(z){let s='';const rr=mulberry32(seed*11+1);const cx=0.5,cy=0.5;const N=8;const ang=[];for(let i=0;i<N;i++)ang.push(i/N*6.283+rr()*0.4);
+    for(const an of ang)s+=line(P(cx,cy,z+0.03),P(cx+Math.cos(an)*0.42,cy+Math.sin(an)*0.42*0.9,z+0.02),'var(--edge)',0.8,0.55);
+    for(let i=0;i<N;i++){const a=ang[i],b=ang[(i+1)%N],rmid=0.24+rr()*0.14;s+=line(P(cx+Math.cos(a)*rmid,cy+Math.sin(a)*rmid*0.9,z+0.025),P(cx+Math.cos(b)*rmid,cy+Math.sin(b)*rmid*0.9,z+0.025),'var(--mesh)',0.6,0.4);}
+    return s;}
+  function r_hbm(z){let s='';const a=0.32,b=0.68;for(let k=0;k<6;k++){const zz=z+0.01+k*0.03;s+=poly([P(a,a,zz),P(b,a,zz),P(b,b,zz),P(a,b,zz)],'none','var(--edge)',0.8,0.55);}
+    for(let k=0;k<6;k++){const zz=z+0.01+k*0.03;s+=line(P(a,a,zz),P(a,a,zz+0.03),'var(--edge)',0.5,0.3);}return s;}
+  function r_fanout(z){let s='';const src=P(0.5,0.16,z+0.06);const N=9;for(let i=0;i<N;i++){const x=M+(1-2*M)*i/(N-1);const win=(i%3===0);s+=line(src,P(x,0.86,z+0.02),win?accent:'var(--mesh)',win?1:0.6,win?0.8:0.4);}s+=`<circle cx="${f(src[0])}" cy="${f(src[1])}" r="2.6" fill="${accent}"/>`;return s;}
+  function r_engine(z){const a=0.34,b=0.66,hh=0.12;let s='';
+    const C=[[a,a],[b,a],[b,b],[a,b]];const bot=C.map(c=>P(c[0],c[1],z)), top=C.map(c=>P(c[0],c[1],z+hh));
+    const faces=[];for(let i=0;i<4;i++){const j=(i+1)%4;faces.push({q:[bot[i],bot[j],top[j],top[i]],near:(bot[i][1]+bot[j][1])/2});}
+    faces.sort((u,v)=>u.near-v.near);
+    faces.forEach((fc,k)=>{s+=poly(fc.q,(k<2)?'var(--panel2)':'var(--panel)','var(--edge)',1,0.6);});
+    s+=poly(top,accent,'var(--edge)',1,0.85);return s;}
+  function r_silicon(z){let s='';const a=glass?0.31:0.27,b=glass?0.69:0.73;const dz=glass?0.04:0.085;
+    s+=`<polygon points="${[P(a-0.02,a-0.02,z+dz+0.01),P(b+0.02,a-0.02,z+dz+0.01),P(b+0.02,b+0.02,z+dz+0.01),P(a-0.02,b+0.02,z+dz+0.01)].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="#9aa0a6" stroke-width="${f(2*lw)}" stroke-opacity="0.9"/>`;
+    const C=8,R=8;for(let i=0;i<C;i++)for(let j=0;j<R;j++){const x0=a+(b-a)*i/C+0.005,x1=a+(b-a)*(i+0.86)/C,y0=a+(b-a)*j/R+0.005,y1=a+(b-a)*(j+0.86)/R;
+      const gu=i/C,gv=j/R;const col=hsl2hex(58+gu*80-gv*14,68,56+gu*8);
+      s+=`<polygon points="${[P(x0,y0,z+dz),P(x1,y0,z+dz),P(x1,y1,z+dz),P(x0,y1,z+dz)].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="${col}" fill-opacity="1"/>`;}
+    return s;}
+
+  // ---------- COMPONENT layer renderers — organized DATA-FIELDS: grid/array substrate, seed-modulated ----------
+  // shared: raised/again tiled cell field. fillFn(i,j,rr)->{on,h,op,col}; draws a full regular grid, back->front.
+  function cellField(z,C,R,fillFn){let cells=[];const rr=mulberry32(seed*101+C*7+R*13);
+    for(let j=0;j<R;j++)for(let i=0;i<C;i++){const st=fillFn(i,j,rr,C,R)||{};cells.push({i,j,...st});}
+    // draw back (low i+j) to front for correct raised-cell occlusion
+    cells.sort((a,b)=>(a.i+a.j)-(b.i+b.j));
+    let out='';for(const c of cells){const gx0=M+(1-2*M)*(c.i+0.10)/C,gx1=M+(1-2*M)*(c.i+0.90)/C,gy0=M+(1-2*M)*(c.j+0.10)/R,gy1=M+(1-2*M)*(c.j+0.90)/R;
+      const h=c.h||0;const zz=z+0.014;
+      if(h>0.001){ // raised cell: camera-facing faces + top
+        out+=raise(gx0,gx1,gy0,gy1,zz,h,c.col||accent,c.op==null?0.85:c.op);
+      } else { // flat cell
+        out+=poly([P(gx0,gy0,zz),P(gx1,gy0,zz),P(gx1,gy1,zz),P(gx0,gy1,zz)],c.col||'none','var(--edge)',0.5,c.op==null?0.28:c.op);
+      }}
+    return out;}
+  const smooth=(x)=>x*x*(3-2*x);
+  function fieldNoise(i,j,C,R,o){return 0.5+0.5*Math.sin((i/C)*6.0+o)*Math.cos((j/R)*5.2+o*1.3)+0.18*Math.sin((i+j)*1.7+o*2);}
+
+  // 1 VENDOR SILOS — regular blocks in strict columns, each column its own SDK texture, hard gaps between (non-interchangeable)
+  function r_vendorsilos(z){let s='';const cols=4,rows=6;const rr=mulberry32(seed*13+1);
+    for(let cI=0;cI<cols;cI++){const baseH=0.05+0.03*cI;const tex=cI;
+      for(let j=0;j<rows;j++){const i=cI;const gx0=M+(1-2*M)*(cI*1.0+0.14)/(cols),gx1=M+(1-2*M)*(cI*1.0+0.86)/(cols);
+        const gy0=M+(1-2*M)*(j+0.12)/rows,gy1=M+(1-2*M)*(j+0.88)/rows;const h=baseH*(0.7+0.5*rr());const zz=z+0.014;
+        s+=raise(gx0,gx1,gy0,gy1,zz,h,'none',0.5);const tp=[P(gx0,gy0,zz+h),P(gx1,gy0,zz+h),P(gx1,gy1,zz+h),P(gx0,gy1,zz+h)];
+        const c=[(P(gx0,gy0,zz+h)[0]+P(gx1,gy1,zz+h)[0])/2,(P(gx0,gy0,zz+h)[1]+P(gx1,gy1,zz+h)[1])/2];
+        if(tex===0)s+=`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="1.3" fill="${accent}" fill-opacity="0.8"/>`;
+        else if(tex===1)s+=line([c[0]-5,c[1]],[c[0]+5,c[1]],accent,0.7,0.7);
+        else if(tex===2){s+=line([c[0],c[1]-4],[c[0],c[1]+4],accent,0.7,0.6);}
+        else s+=`<path d="M${f(c[0]-3)},${f(c[1]-3)} l6,6 M${f(c[0]+3)},${f(c[1]-3)} l-6,6" stroke="${accent}" stroke-width="0.7" stroke-opacity="0.6" fill="none"/>`;}
+      if(cI<cols-1){const gx=M+(1-2*M)*(cI+1)/cols;s+=line(P(gx,M,z+0.02),P(gx,1-M,z+0.02),'var(--muted)',0.7,0.35,'2 3');}}
+    return s;}
+
+  // 2 FOUR EFFORTS — one source row, the SAME grid pattern duplicated across 4 target quadrants (repeated work)
+  function r_foureff(z){let s='';const src=P(0.5,0.12,z+0.12);const rr=mulberry32(seed*17+2);
+    const patt=[];for(let a=0;a<9;a++)patt.push(rr()<0.5);
+    for(let q=0;q<4;q++){const ox=(q%2)*0.42+0.1,oy=Math.floor(q/2)*0.34+0.34;
+      for(let a=0;a<9;a++){const ii=a%3,jj=Math.floor(a/3);const gx0=ox+ii*0.1,gy0=oy+jj*0.08;const on=patt[a];
+        const h=on?0.03:0;const zz=z+0.014;const bt=[P(gx0,gy0,zz),P(gx0+0.08,gy0,zz),P(gx0+0.08,gy0+0.06,zz),P(gx0,gy0+0.06,zz)];
+        if(on){s+=raise(gx0,gx0+0.08,gy0,gy0+0.06,zz,h,accent,0.7);}
+        else s+=poly(bt,'none','var(--edge)',0.5,0.25);}
+      s+=line(src,P(ox+0.15,oy,z+0.06),'var(--mesh)',0.7,0.4);}
+    s+=`<circle cx="${f(src[0])}" cy="${f(src[1])}" r="3" fill="${accent}"/>`;return s;}
+
+  // 3 LOCK-IN — a full grid entirely enclosed; dense uniform fill with a hard boundary ring (closed system)
+  function r_lockin(z){let s=cellField(z,10,8,(i,j,rr,C,R)=>{const inside=(i>0&&i<C-1&&j>0&&j<R-1);return inside?{on:true,h:0.02+0.02*(1-Math.abs((i/C)-0.5)),col:accent,op:0.5}:{op:0.5};});
+    // boundary ring emphasized (locked border)
+    const ring=[P(M,M,z+0.05),P(1-M,M,z+0.05),P(1-M,1-M,z+0.05),P(M,1-M,z+0.05)];
+    s+=poly(ring,'none','var(--edge)',1.4,0.85);
+    const c=P(0.5,0.5,z+0.09);s+=`<circle cx="${f(c[0])}" cy="${f(c[1]-1)}" r="4" fill="none" stroke="${accent}" stroke-width="1.4"/><rect x="${f(c[0]-1.4)}" y="${f(c[1]-1)}" width="2.8" height="6" fill="${accent}"/>`;
+    return s;}
+
+  // 4 PROFILE TRACE — regular time grid; per-row occupancy bars with a few hot (bottleneck) cells raised
+  function r_profiletrace(z){return cellField(z,14,7,(i,j,rr,C,R)=>{const v=fieldNoise(i,j,C,R,seed*0.3);const on=v>0.55;const hot=on&&rr()<0.12;return on?{on:true,h:hot?0.10:0.03,col:hot?accent:'none',op:hot?0.9:0.45}:{op:0.2};});}
+
+  // 5 IR LOWERING — top sparse graph resolving into a dense, fully-regular op grid below (ordered)
+  function r_irlower(z){let s='';const rr=mulberry32(seed*19+2);const K=10;let prev=null;
+    for(let i=0;i<K;i++){const x=0.28+rr()*0.44,y=0.22+rr()*0.12;const q=P(x,y,z+0.08);s+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="1.5" fill="var(--dot)" fill-opacity="0.6"/>`;if(prev)s+=line(prev,q,'var(--mesh)',0.5,0.3);prev=q;}
+    // fully regular lowered grid (lower half)
+    const C=12,R=4;for(let j=0;j<R;j++)for(let i=0;i<C;i++){const gx0=M+(1-2*M)*(i+0.12)/C,gx1=M+(1-2*M)*(i+0.88)/C;const yy0=0.5+j*0.09,yy1=yy0+0.06;
+      s+=poly([P(gx0,yy0,z+0.02),P(gx1,yy0,z+0.02),P(gx1,yy1,z+0.02),P(gx0,yy1,z+0.02)],'none','var(--edge)',0.5,0.4);}
+    return s;}
+
+  // 6 AGENT SWARM — regular array of worker cells; a seed-patterned subset ACTIVE (raised+accent), coverage varies
+  function r_agentswarm(z){return cellField(z,11,9,(i,j,rr,C,R)=>{const v=fieldNoise(i,j,C,R,seed*0.7+1);const act=v>0.62;return act?{on:true,h:0.03+0.05*(v-0.62),col:accent,op:0.85}:{col:'none',op:0.22};});}
+
+  // 7 CANDIDATE RACE — strict lanes (rows) of equal cells; per lane a run of filled cells = progress; one lane wins to the edge
+  function r_race(z){let s='';const lanes=7,C=12;const rr=mulberry32(seed*29+4);const win=Math.floor(rr()*lanes);
+    for(let j=0;j<lanes;j++){const prog=(j===win)?C:1+Math.floor(rr()*(C-2));const gy0=M+(1-2*M)*(j+0.2)/lanes,gy1=M+(1-2*M)*(j+0.8)/lanes;
+      for(let i=0;i<C;i++){const gx0=M+(1-2*M)*(i+0.1)/C,gx1=M+(1-2*M)*(i+0.9)/C;const done=i<prog;const isW=(j===win);
+        if(done){const h=isW?0.035:0.02;s+=raise(gx0,gx1,gy0,gy1,z+0.014,h,isW?accent:'var(--mesh)',isW?0.9:0.5);}
+        else s+=poly([P(gx0,gy0,z+0.014),P(gx1,gy0,z+0.014),P(gx1,gy1,z+0.014),P(gx0,gy1,z+0.014)],'none','var(--edge)',0.4,0.18);}}
+    return s;}
+
+  // 8 LAYER FUSION — dense grid on the left collapsing to a smaller dense grid on the right (ops fused)
+  function r_fusion(z){let s='';const rr=mulberry32(seed*23+3);
+    // left big grid
+    for(let j=0;j<6;j++)for(let i=0;i<6;i++){const gx0=0.14+i*0.045,gy0=0.3+j*0.06;s+=poly([P(gx0,gy0,z+0.02),P(gx0+0.035,gy0,z+0.02),P(gx0+0.035,gy0+0.045,z+0.02),P(gx0,gy0+0.045,z+0.02)],rr()<0.5?'var(--mesh)':'none','var(--edge)',0.5,0.4);}
+    // arrows converging
+    for(let k=0;k<3;k++)s+=line(P(0.44,0.36+k*0.12,z+0.05),P(0.6,0.48,z+0.06),accent,0.7,0.55);
+    // right small dense fused grid raised
+    for(let j=0;j<3;j++)for(let i=0;i<3;i++){const gx0=0.62+i*0.06,gy0=0.42+j*0.06,zz=z+0.014,h=0.05;
+      s+=poly([P(gx0,gy0,zz+h),P(gx0+0.05,gy0,zz+h),P(gx0+0.05,gy0+0.05,zz+h),P(gx0,gy0+0.05,zz+h)],accent,'var(--edge)',0.5,0.85);}
+    return s;}
+
+  // 9 PRECISION SHIFT — a tensor grid shown as tall bit-stacks that drop to shorter stacks across the field (FP32->FP16)
+  function r_precision(z){let s='';const C=10,R=6;const rr=mulberry32(seed*31+5);
+    for(let j=0;j<R;j++)for(let i=0;i<C;i++){const gx0=M+(1-2*M)*(i+0.2)/C,gx1=M+(1-2*M)*(i+0.8)/C,gy0=M+(1-2*M)*(j+0.2)/R,gy1=M+(1-2*M)*(j+0.8)/R;
+      const frac=i/(C-1);const bits=Math.round(6-4*frac+ (rr()-0.5));const h=Math.max(0.012,bits*0.012);const zz=z+0.014;
+      const col=frac<0.5?'none':accent;const op=frac<0.5?0.5:0.8;
+      s+=raise(gx0,gx1,gy0,gy1,zz,h,col,op);}
+    return s;}
+
+  // 10 ALGEBRAIC REWRITE — a big dense tensor grid (the 48GB intermediate) with a swath ghosted/removed, collapsing to a compact block
+  function r_rewrite(z){let s='';const C=12,R=8;const rr=mulberry32(seed*37+6);const cut=3+Math.floor(rr()*3);
+    for(let j=0;j<R;j++)for(let i=0;i<C;i++){const gx0=M+(1-2*M)*(i+0.12)/C,gx1=M+(1-2*M)*(i+0.88)/C,gy0=M+(1-2*M)*(j+0.12)/R,gy1=M+(1-2*M)*(j+0.88)/R;
+      const removed=(i>=cut&&i<cut+4);const zz=z+0.014;
+      if(removed)s+=poly([P(gx0,gy0,zz),P(gx1,gy0,zz),P(gx1,gy1,zz),P(gx0,gy1,zz)],'none','var(--muted)',0.4,0.18);
+      else {s+=raise(gx0,gx1,gy0,gy1,zz,0.02,'var(--mesh)',0.5);}}
+    // ghost X over removed swath
+    const rx0=M+(1-2*M)*cut/C,rx1=M+(1-2*M)*(cut+4)/C;s+=line(P(rx0,M,z+0.05),P(rx1,1-M,z+0.05),'var(--muted)',0.7,0.4,'3 3');s+=line(P(rx1,M,z+0.05),P(rx0,1-M,z+0.05),'var(--muted)',0.7,0.4,'3 3');
+    return s;}
+
+  // 11 CODEGEN EMITTER — regular rows of code cells filling left->right (emitted kernel lines), coverage grows down
+  function r_codegen(z){return cellField(z,16,9,(i,j,rr,C,R)=>{const fillTo=Math.floor(C*(0.3+0.6*(j/R)));const on=i<fillTo && rr()<0.9;return on?{on:false,col:(i===fillTo-1?accent:'var(--mesh)'),op:i===fillTo-1?0.8:0.5}:{op:0.15};});}
+
+  // 12 BINARY ASSEMBLE — many small kernel tiles across the grid consolidating into one solid raised block at center
+  function r_assemble(z){let s=cellField(z,12,8,(i,j,rr,C,R)=>{const cx=C/2,cy=R/2;const d=Math.hypot(i-cx+0.5,j-cy+0.5);return d>2.2?{col:'var(--mesh)',op:0.35}:{op:0.1};});
+    // central consolidated block
+    s+=ebox(0.4,0.6,0.4,0.6,z+0.014,0.09,accent).s;
+    // convergence ticks
+    const rr=mulberry32(seed*41+7);for(let k=0;k<8;k++){const a=k/8*6.283;s+=line(P(0.5+Math.cos(a)*0.34,0.5+Math.sin(a)*0.34*0.9,z+0.03),P(0.5+Math.cos(a)*0.12,0.5+Math.sin(a)*0.12*0.9,z+0.05),accent,0.5,0.4,'2 3');}
+    return s;}
+
+  // 13 FLASH TO DEVICE — a solid binary grid-block up top streaming down as rows into a device grid; residual ghost grid leaving
+  function r_flash(z){let s='';s+=ebox(0.38,0.62,0.28,0.46,z+0.2,0.06,accent).s;
+    // streaming rows
+    for(let k=0;k<5;k++){const y=0.5+k*0.02;s+=line(P(0.44,0.5+ k*0.0,z+0.2-k*0.04),P(0.5,0.62,z+0.05),accent,0.6,0.6-k*0.08);}
+    s+=line(P(0.5,0.5,z+0.2),P(0.5,0.62,z+0.04),accent,1.3,0.85);const ar=P(0.5,0.62,z+0.04);s+=`<path d="M${f(ar[0]-5)},${f(ar[1]-6)} L${f(ar[0])},${f(ar[1])} L${f(ar[0]+5)},${f(ar[1]-6)}" fill="none" stroke="${accent}" stroke-width="1.3"/>`;
+    // device grid (regular pin field) at bottom
+    for(let j=0;j<4;j++)for(let i=0;i<8;i++){const gx=0.36+i*0.038,gy=0.66+j*0.035;const q=P(gx,gy,z+0.02);s+=`<circle cx="${f(q[0])}" cy="${f(q[1])}" r="1.1" fill="var(--dot)" fill-opacity="0.6"/>`;}
+    s+=poly([P(0.34,0.63,z+0.02),P(0.66,0.63,z+0.02),P(0.66,0.8,z+0.02),P(0.34,0.8,z+0.02)],'none','var(--edge)',0.8,0.5);
+    // residual ghost grid leaving (dashed, faint, above)
+    s+=poly([P(0.4,0.3,z+0.34),P(0.6,0.3,z+0.34),P(0.6,0.46,z+0.34),P(0.4,0.46,z+0.34)],'none','var(--muted)',0.5,0.22);
+    return s;}
+
+  // 14 ALLCLOSE CHECK — two identical tensor grids (candidate vs reference), matching cells lit in the same pattern, verified
+  function r_allclose(z){let s='';const rr=mulberry32(seed*43+8);const patt=[];for(let a=0;a<24;a++)patt.push(rr()<0.5);
+    const grid=(ox)=>{let g='';for(let j=0;j<4;j++)for(let i=0;i<6;i++){const on=patt[j*6+i];const gx0=ox+i*0.045,gy0=0.36+j*0.055;const zz=z+0.014;
+      if(on)g+=poly([P(gx0,gy0,zz+0.025),P(gx0+0.035,gy0,zz+0.025),P(gx0+0.035,gy0+0.04,zz+0.025),P(gx0,gy0+0.04,zz+0.025)],accent,'var(--edge)',0.5,0.8);
+      else g+=poly([P(gx0,gy0,zz),P(gx0+0.035,gy0,zz),P(gx0+0.035,gy0+0.04,zz),P(gx0,gy0+0.04,zz)],'none','var(--edge)',0.4,0.25);}return g;};
+    s+=grid(0.16);s+=grid(0.56);
+    const c=P(0.5,0.52,z+0.09);s+=`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="7" fill="none" stroke="#74C476" stroke-width="1.3"/><path d="M${f(c[0]-3)},${f(c[1])} l2.2,2.6 l4.4,-5.5" fill="none" stroke="#74C476" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    return s;}
+
+  // 15 AUDIT SOURCE — regular stacked pages, each a dense grid of code-line cells (readable, inspectable)
+  function r_audit(z){let s='';const rr=mulberry32(seed*47+9);
+    for(let p=0;p<3;p++){const ox=0.28+p*0.03,oy=0.26+p*0.03,zz=z+0.02+p*0.02;
+      s+=poly([P(ox,oy,zz),P(ox+0.34,oy,zz),P(ox+0.34,oy+0.4,zz),P(ox,oy+0.4,zz)],'var(--panel2)','var(--edge)',0.6,0.5);
+      if(p===2)for(let j=0;j<9;j++)for(let i=0;i<10;i++){if(rr()<0.62){const gx=ox+0.03+i*0.028,gy=oy+0.04+j*0.04;s+=poly([P(gx,gy,zz+0.005),P(gx+0.02,gy,zz+0.005),P(gx+0.02,gy+0.02,zz+0.005),P(gx,gy+0.02,zz+0.005)],'var(--mesh)','none',0,0.55);}}}
+    return s;}
+
+  // 16 KERNELDB FLYWHEEL — ordered grid of kernel tiles with a rising coverage/height gradient (compounding), directional
+  function r_flywheel(z){return cellField(z,12,10,(i,j,rr,C,R)=>{const t=(i+ (R-1-j))/(C+R-2);const on=rr()<(0.25+0.7*t);return on?{on:true,h:0.012+0.06*t,col:accent,op:0.55+0.4*t}:{op:0.15};});}
+
+  // 17 CACHE HIT/MISS — full regular cache table, sparse validated (raised accent) cells in a pattern, one bright HIT
+  function r_cachehit(z){const rr0=mulberry32(seed*53+10);const hi=Math.floor(rr0()*10),hj=Math.floor(rr0()*7);
+    return cellField(z,10,7,(i,j,rr,C,R)=>{if(i===hi&&j===hj)return{on:true,h:0.08,col:accent,op:1};const val=rr()<0.3;return val?{on:true,h:0.025,col:accent,op:0.5}:{op:0.2};});}
+
+  // 18 SPEEDUP BARS — a full field of bars; height DROPS sharply left->right region (before vs after), gradient
+  function r_speedup(z){let s='';const C=12,R=5;for(let j=0;j<R;j++)for(let i=0;i<C;i++){const gx0=M+(1-2*M)*(i+0.25)/C,gx1=M+(1-2*M)*(i+0.75)/C,gy0=M+(1-2*M)*(j+0.3)/R,gy1=M+(1-2*M)*(j+0.7)/R;
+    const frac=i/(C-1);const h=0.02+0.16*Math.pow(1-frac,2);const zz=z+0.014;const after=frac>0.55;
+    s+=raise(gx0,gx1,gy0,gy1,zz,h,after?accent:'none',after?0.85:0.5);}
+    return s;}
+
+  // 19 COST CURVE — arrayed columns; height decays across the field along a curve (cost per query drops with scale)
+  function r_costcurve(z){let s='';const C=14,R=4;for(let j=0;j<R;j++)for(let i=0;i<C;i++){const gx0=M+(1-2*M)*(i+0.28)/C,gx1=M+(1-2*M)*(i+0.72)/C,gy0=M+(1-2*M)*(j+0.32)/R,gy1=M+(1-2*M)*(j+0.68)/R;
+    const h=0.02+0.15*Math.exp(-i*0.28);const zz=z+0.014;const last=i>=C-2;
+    s+=raise(gx0,gx1,gy0,gy1,zz,h,last?accent:'none',last?0.85:0.5);}
+    return s;}
+
+  // 20 INDEPENDENT LAYER — one dense uniform slab-grid spanning the whole plane (the single clean layer), thin + regular
+  function r_independent(z){let s=cellField(z,16,10,(i,j,rr,C,R)=>({on:true,h:0.02,col:accent,op:0.35+0.4*(i/C)}));
+    // clean top edge + dashed continuation (it bridges, then exits)
+    s+=poly([P(M,M,z+0.045),P(1-M,M,z+0.045),P(1-M,1-M,z+0.045),P(M,1-M,z+0.045)],'none','var(--edge)',1.2,0.7);
+    return s;}
+
+  const MESH={
+    'point-cloud':r_pointcloud,'woven-field':z=>r_woven(z,0.30,3),'ridgelines':r_ridgelines,'jagged-peaks':z=>r_woven(z,0.55,9),
+    'terraces':r_terraces,'cache-plane':r_cacheplane,'cache-tiles':r_cachetiles,'needle-field':r_needle,'convergent-funnel':r_funnel,
+    'graph-nodes':r_graph,'systolic-array':r_systolic,'columnar':r_columnar,'folded-strata':r_folded,'cross-hatch':r_crosshatch,
+    'halftone-dots':r_halftone,'blueprint-dash':r_blueprint,'aperture-gate':r_aperture,'ripple':r_ripple,'polar-weave':r_polar,
+    'shard-cracks':r_shard,'hbm-stack':r_hbm,'fanout-delta':r_fanout,'engine-block':r_engine,'silicon-die':r_silicon,
+    'vendor-silos':r_vendorsilos,'four-efforts':r_foureff,'lock-in':r_lockin,'profile-trace':r_profiletrace,'ir-lowering':r_irlower,
+    'agent-swarm':r_agentswarm,'candidate-race':r_race,'layer-fusion':r_fusion,'precision-shift':r_precision,'algebraic-rewrite':r_rewrite,
+    'codegen-emitter':r_codegen,'binary-assemble':r_assemble,'flash-to-device':r_flash,'allclose-check':r_allclose,'audit-source':r_audit,
+    'kerneldb-flywheel':r_flywheel,'cache-hit-miss':r_cachehit,'speedup-bars':r_speedup,'cost-curve':r_costcurve,'independent-layer':r_independent
+  };
+
+  for(let i=0;i<n;i++)push(frame(zAt(i),i));
+  const dx=0.66,dy=0.40;
+  push(line(P(dx,dy,zTop+0.05),P(dx,dy,0),accent,1.2,0.5,'5 5'));
+  // content strictly far->near (bottom of stack first) so every layer — including silicon — occludes correctly
+  for(let i=n-1;i>=0;i--){const st=steps[i],z=zAt(i);const rfn=MESH[st.mesh]||r_woven;push(`<g>`+rfn(z)+`</g>`);}
+  for(let i=0;i<n;i++){const p=P(dx,dy,zAt(i));push(`<circle cx="${f(p[0])}" cy="${f(p[1])}" r="3.4" fill="${accent}"/><circle cx="${f(p[0])}" cy="${f(p[1])}" r="6" fill="none" stroke="${accent}" stroke-width="${f(1*lw)}" stroke-opacity="0.5"/>`);}
+  if(labels){for(let i=0;i<n;i++){const st=steps[i];const p=P(1-M,0.5,zAt(i));const ax=f(p[0]),ay=f(p[1]);const lx=f(ax+ld);
+    push(`<line x1="${ax}" y1="${ay}" x2="${lx-10}" y2="${ay}" stroke="var(--edge)" stroke-width="${f(1*lw)}" stroke-opacity="0.4"/><circle cx="${ax}" cy="${ay}" r="2" fill="${accent}"/>`);
+    const gap=f(13*ts*lg);push(`<text x="${lx}" y="${f(ay-2)}" font-family="var(--mono)" font-size="${f(14*ts)}" letter-spacing="0.12em" fill="var(--edge)">${st.label}</text>`);
+    push(`<text x="${lx}" y="${f(ay-2+gap)}" font-family="var(--mono)" font-size="${f(9.5*ts)}" letter-spacing="0.14em" fill="var(--muted)">${st.sub}</text>`);}}
+  return `<svg id="art" width="${W}" height="${Ht}" viewBox="0 0 ${W} ${Ht}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+}
+(typeof window!=='undefined'?window:this).DS={build,SCENES,SCENE_LIST,SCENE_NAME,MESH_LIST};
+</script>
+<script>
+const $=id=>document.getElementById(id),stage=$('stage');
+// populate scene dropdown
+for(const k of DS.SCENE_LIST){const o=document.createElement('option');o.value=k;o.textContent=DS.SCENE_NAME[k];$('scene').appendChild(o);}
+$('scene').value='platformless';
+let stepMeshes=[];
+function buildMeshBar(){const bar=$('meshbar');bar.querySelectorAll('.step').forEach(e=>e.remove());
+  const steps=DS.SCENES[$('scene').value].steps;stepMeshes=steps.map(s=>s.mesh);
+  steps.forEach((st,i)=>{const wrap=document.createElement('div');wrap.className='step';
+    const lab=document.createElement('span');lab.textContent=(i+1)+' · '+st.label;
+    const sel=document.createElement('select');
+    for(const m of DS.MESH_LIST){const o=document.createElement('option');o.value=m.id;o.textContent=m.name;if(m.id===st.mesh)o.selected=true;sel.appendChild(o);}
+    sel.addEventListener('change',()=>{stepMeshes[i]=sel.value;render();});
+    wrap.appendChild(lab);wrap.appendChild(sel);bar.appendChild(wrap);});
+}
+function render(){try{stage.innerHTML=DS.build({scene:$('scene').value,stepMeshes:stepMeshes.slice(),seed:parseInt($('seed').value,10)||0,accent:$('accent').value,az:parseInt($('az').value,10),el:parseInt($('el').value,10),lineWeight:parseFloat($('lw').value),textScale:parseFloat($('ts').value),labelGap:parseFloat($('lg').value),labelDist:parseFloat($('ld').value),spread:parseFloat($('spread').value),glass:$('glass').checked,labels:$('labels').checked});}catch(e){stage.innerHTML='<div style="color:#C98A4B;font-family:monospace;font-size:13px;max-width:640px;padding:20px;line-height:1.6">Render error: '+(e&&e.message||e)+'<br><br>Please hard-refresh (Cmd/Ctrl-Shift-R) or re-open the file.</div>';}}
+$('scene').addEventListener('change',()=>{buildMeshBar();render();});
+$('rnd').onclick=()=>{$('seed').value=Math.floor(Math.random()*99999);render();};
+['seed','accent','az','el','lw','ts','lg','ld','spread','glass','labels'].forEach(id=>{$(id).addEventListener('input',render);$(id).addEventListener('change',render);});
+function resolvedSVG(){const src=$('art');if(!src)return'';const clone=src.cloneNode(true),cs=getComputedStyle(document.documentElement);const map={'--bg':'','--edge':'','--mesh':'','--dot':'','--muted':'','--panel':'','--panel2':'','--mono':''};for(const k in map)map[k]=cs.getPropertyValue(k).trim()||'#000';map['--mono']=(map['--mono']||'monospace').split('"').join('');let s=new XMLSerializer().serializeToString(clone);for(const k in map)s=s.split('var('+k+')').join(map[k]);return s;}
+function dl(n,b){try{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),800);}catch(e){}}
+const fn=()=>'yasp-descent-'+$('scene').value+'-'+$('seed').value;
+$('svg').onclick=()=>dl(fn()+'.svg',new Blob([resolvedSVG()],{type:'image/svg+xml'}));
+$('png').onclick=()=>{const svg=resolvedSVG(),sc=2,img=new Image(),url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));img.onload=()=>{const vb=($('art').getAttribute('viewBox')||'0 0 1180 1480').split(' ');const VW=parseFloat(vb[2]),VH=parseFloat(vb[3]);const c=document.createElement('canvas');c.width=VW*sc;c.height=VH*sc;const x=c.getContext('2d');x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0B0C0E';x.fillRect(0,0,c.width,c.height);x.scale(sc,sc);x.drawImage(img,0,0,VW,VH);URL.revokeObjectURL(url);c.toBlob(b=>dl(fn()+'.png',b),'image/png');};img.src=url;};
+function copySVG(){const s=resolvedSVG();if(!s)return;let w=document.getElementById('__cw');if(!w){w=document.createElement('div');w.id='__cw';w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px;font-family:monospace';const box=document.createElement('div');box.style.cssText='background:#0c0d10;border:1px solid #2A2C31;padding:14px;width:min(760px,92vw);display:flex;flex-direction:column;gap:10px';const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;color:#CFCEC6;font-size:12px';const t=document.createElement('span');t.textContent='SVG';const msg=document.createElement('span');msg.id='__cmsg';msg.style.cssText='flex:1;color:#7C7B72';const bc=document.createElement('button');bc.textContent='COPY';bc.style.cssText='font-family:monospace;font-size:11px;background:#2C30E6;color:#fff;border:none;padding:7px 12px;cursor:pointer';const bx=document.createElement('button');bx.textContent='CLOSE';bx.style.cssText='font-family:monospace;font-size:11px;background:transparent;color:#CFCEC6;border:1px solid #2A2C31;padding:7px 12px;cursor:pointer';const ta=document.createElement('textarea');ta.id='__cta';ta.readOnly=true;ta.style.cssText='width:100%;height:54vh;background:#08090b;color:#CFCEC6;border:1px solid #2A2C31;font-family:monospace;font-size:11px;padding:10px;resize:none';row.appendChild(t);row.appendChild(msg);row.appendChild(bc);row.appendChild(bx);box.appendChild(row);box.appendChild(ta);w.appendChild(box);document.body.appendChild(w);const tryCopy=()=>{ta.focus();ta.select();try{ta.setSelectionRange(0,ta.value.length);}catch(_){}let ok=false;try{ok=document.execCommand('copy');}catch(_){}if(ok){msg.textContent='Copied to clipboard';return;}if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(()=>msg.textContent='Copied').catch(()=>msg.textContent='Press Cmd/Ctrl-C');}else msg.textContent='Press Cmd/Ctrl-C';};bc.onclick=tryCopy;bx.onclick=()=>w.style.display='none';w.addEventListener('click',e=>{if(e.target===w)w.style.display='none';});w.__try=tryCopy;}const ta=document.getElementById('__cta');ta.value=s;w.style.display='flex';document.getElementById('__cmsg').textContent='Press Cmd/Ctrl-C';w.__try();}
+stage.addEventListener('click',copySVG);
+try{buildMeshBar();render();}catch(e){stage.innerHTML='<div style="color:#C98A4B;font-family:monospace;padding:20px">Init error: '+(e&&e.message||e)+'</div>';}
+</script></body></html>

@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beam Swarm</title>
+<style>
+  :root{
+    --carbon:#0A0B0D; --carbon-2:#121317; --carbon-3:#181A1F;
+    --line:rgba(240,232,216,.10); --line-2:rgba(240,232,216,.18);
+    --cream:#F0E8D8; --cream-dim:rgba(240,232,216,.55); --cream-faint:rgba(240,232,216,.35);
+    --sage:#9DB89E; --sage-dim:rgba(157,184,158,.35);
+    --radius:10px;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--carbon);color:var(--cream);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:18px 22px;border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;font-weight:600;letter-spacing:.02em;margin:0}
+  header .tag{font-family:var(--mono);font-size:11px;color:var(--cream-faint);letter-spacing:.06em;text-transform:uppercase}
+  header .thesis{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--cream-dim)}
+  header .thesis b{color:var(--sage);font-weight:500}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:0;min-height:calc(100% - 61px)}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+
+  .stage{display:flex;flex-direction:column;padding:22px;gap:14px;background:radial-gradient(120% 90% at 50% -10%, rgba(157,184,158,.04), transparent 60%),var(--carbon);min-width:0}
+  .canvas-wrap{position:relative;flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--carbon);min-height:340px}
+  #view{display:block;width:100%;height:auto;max-height:72vh;aspect-ratio:1/1}
+  .transport{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .stage-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--cream-dim);margin-left:auto}
+  .stage-bar .k{color:var(--cream-faint);text-transform:uppercase;letter-spacing:.06em}
+  .stage-bar .v{color:var(--cream)}
+  .stage-bar .seed-v{color:var(--sage)}
+
+  .panel{border-left:1px solid var(--line);background:var(--carbon-2);padding:0 0 40px;overflow-y:auto;max-height:calc(100vh - 61px)}
+  @media(max-width:900px){.panel{border-left:none;border-top:1px solid var(--line);max-height:none}}
+  .section{padding:18px 20px;border-bottom:1px solid var(--line)}
+  .section > .h{display:flex;align-items:center;gap:8px;margin:0 0 14px;font-family:var(--mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--cream-dim)}
+  .section > .h .n{color:var(--sage);font-weight:500}
+  .hint{font-family:var(--mono);font-size:10px;color:var(--cream-faint);margin-top:9px;line-height:1.5}
+
+  label.field{display:block;margin:0 0 13px}
+  label.field:last-child{margin-bottom:0}
+  .field .lab{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:11px;color:var(--cream-dim);margin-bottom:6px}
+  .field .lab .val{color:var(--cream)}
+  .field .sub{font-family:var(--mono);font-size:9.5px;color:var(--cream-faint);letter-spacing:.02em}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line-2);border-radius:2px;outline:none;margin:6px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--cream);border:2px solid var(--carbon-2);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--cream);border:2px solid var(--carbon-2);cursor:pointer}
+
+  select,input[type=number]{width:100%;background:var(--carbon-3);color:var(--cream);border:1px solid var(--line-2);border-radius:7px;padding:8px 10px;font-family:var(--mono);font-size:12px;outline:none}
+  select:focus,input:focus{border-color:var(--sage-dim)}
+  input[type=color]{width:100%;height:34px;padding:2px;background:var(--carbon-3);border:1px solid var(--line-2);border-radius:7px;cursor:pointer}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row2 .field{margin-bottom:0}
+
+  .swatches{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+  .sw{position:relative;aspect-ratio:1;border-radius:7px;cursor:pointer;border:1px solid var(--line-2);overflow:hidden;transition:transform .12s ease,border-color .12s ease}
+  .sw:hover{transform:translateY(-1px)}
+  .sw .glow{position:absolute;inset:0}
+  .sw.on{border-color:var(--cream)}
+  .sw:not(.on){opacity:.32;filter:saturate(.5)}
+  .sw .dot{position:absolute;right:4px;top:4px;width:7px;height:7px;border-radius:50%;background:var(--cream);opacity:0;transition:opacity .12s}
+  .sw.on .dot{opacity:1}
+
+  textarea#prompt{width:100%;min-height:60px;resize:vertical;background:var(--carbon-3);color:var(--cream);border:1px solid var(--line-2);border-radius:8px;padding:10px 11px;font-family:var(--sans);font-size:13px;line-height:1.45;outline:none}
+  textarea#prompt:focus{border-color:var(--sage-dim)}
+  .status{font-family:var(--mono);font-size:11px;margin-top:9px;min-height:15px;color:var(--cream-faint)}
+  .status.err{color:#E28C8C}.status.ok{color:var(--sage)}
+  .examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{font-family:var(--mono);font-size:10.5px;color:var(--cream-dim);border:1px solid var(--line-2);border-radius:20px;padding:4px 10px;cursor:pointer;background:transparent;transition:border-color .12s,color .12s}
+  .chip:hover{border-color:var(--sage-dim);color:var(--cream)}
+
+  button{font-family:var(--mono);cursor:pointer}
+  .btn{border:1px solid var(--line-2);background:var(--carbon-3);color:var(--cream);border-radius:8px;padding:9px 12px;font-size:12px;letter-spacing:.02em;transition:border-color .12s,background .12s;white-space:nowrap}
+  .btn:hover{border-color:var(--sage-dim)}
+  .btn:active{background:var(--carbon)}
+  .btn.primary{background:var(--sage);color:var(--carbon);border-color:var(--sage);font-weight:600}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.full{width:100%}
+  .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  .reproduce{font-family:var(--mono);font-size:11px;color:var(--cream-dim);background:var(--carbon-3);border:1px solid var(--line);border-radius:8px;padding:10px 11px;margin-top:12px;word-break:break-all;line-height:1.5}
+  .reproduce b{color:var(--sage);font-weight:500}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Beam Swarm</h1>
+  <span class="tag">yasp · agent simulation</span>
+  <span class="thesis">order <b>emerges</b> from local rules · seed makes it reproducible</span>
+</header>
+
+<div class="layout">
+  <div class="stage">
+    <div class="canvas-wrap"><canvas id="view" width="800" height="800"></canvas></div>
+    <div class="transport">
+      <button class="btn primary" id="play">Pause</button>
+      <button class="btn" id="step">Step</button>
+      <button class="btn" id="reset">Reset</button>
+      <div class="stage-bar">
+        <span><span class="k">behaviour</span> <span class="v" id="barBeh">—</span></span>
+        <span><span class="k">agents</span> <span class="v" id="barN">—</span></span>
+        <span><span class="k">seed</span> <span class="v seed-v" id="barSeed">—</span></span>
+        <span><span class="k">frame</span> <span class="v" id="barStep">0</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+
+    <!-- AGENT -->
+    <div class="section">
+      <div class="h"><span class="n">Agent</span> — describe the swarm</div>
+      <textarea id="prompt" placeholder="e.g. a calm cyan murmuration drifting right with long trails"></textarea>
+      <button class="btn primary full" id="genBtn" style="margin-top:10px">Compose swarm</button>
+      <div class="status" id="statusMsg"></div>
+      <div class="examples" id="examples">
+        <button class="chip">tight murmuration, long trails, cyan</button>
+        <button class="chip">slow vortex around the centre, amber</button>
+        <button class="chip">two territories repelling, emerald + coral</button>
+        <button class="chip">migrating stream flowing right, indigo</button>
+      </div>
+    </div>
+
+    <!-- BEHAVIOUR -->
+    <div class="section">
+      <div class="h"><span class="n">Behaviour</span></div>
+      <label class="field">
+        <span class="lab">Preset</span>
+        <select id="preset">
+          <option value="murmuration" selected>Murmuration</option>
+          <optgroup label="── organisation ──">
+          <option value="compile">Compile  pipeline ★</option>
+          <option value="flux">Flux — live inference ★</option>
+          <option value="sort">Sort — rank spectrum</option>
+          <option value="strata">Strata — value layers</option>
+          <option value="descent">Descent — find optima</option>
+          <option value="partition">Partition — clusters</option>
+          <option value="anneal">Anneal — crystallise</option>
+          <option value="route">Route — network</option>
+          </optgroup>
+          <option value="vortex">Vortex</option>
+          <option value="migrate">Migrate</option>
+          <option value="diffuse">Diffuse</option>
+          <option value="territorial">Territorial</option>
+          <option value="orbit">Orbit</option>
+          <option value="ribbon">Ribbon</option>
+          <option value="galaxy">Galaxy</option>
+          <option value="shoal">Shoal</option>
+          <option value="pinwheel">Pinwheel</option>
+          <option value="serpentine">Serpentine</option>
+          <option value="turbulence">Turbulence</option>
+          <option value="array">Array</option>
+          <option value="sequence">Sequence</option>
+          <option value="braid">Braid</option>
+        </select>
+      </label>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Agents <span class="val" id="countVal">260</span></span>
+          <input type="range" id="count" min="30" max="700" step="10" value="260">
+        </label>
+        <label class="field">
+          <span class="lab">Species <span class="val" id="speciesVal">1</span></span>
+          <input type="range" id="species" min="1" max="5" step="1" value="1">
+        </label>
+      </div>
+    </div>
+
+    <!-- RULES -->
+    <div class="section">
+      <div class="h"><span class="n">Swarm rules</span> — local behaviour</div>
+      <label class="field">
+        <span class="lab">Separation <span class="val" id="sepVal">1.4</span></span>
+        <input type="range" id="sep" min="0" max="3" step="0.05" value="1.4">
+      </label>
+      <label class="field">
+        <span class="lab">Alignment <span class="val" id="aliVal">1.1</span></span>
+        <input type="range" id="ali" min="0" max="3" step="0.05" value="1.1">
+      </label>
+      <label class="field">
+        <span class="lab">Cohesion <span class="val" id="cohVal">0.9</span></span>
+        <input type="range" id="coh" min="0" max="3" step="0.05" value="0.9">
+      </label>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Perception <span class="val" id="percVal">46</span></span>
+          <input type="range" id="perc" min="14" max="120" step="2" value="46">
+        </label>
+        <label class="field">
+          <span class="lab">Max speed <span class="val" id="speedVal">3.0</span></span>
+          <input type="range" id="speed" min="0.5" max="6" step="0.1" value="3.0">
+        </label>
+      </div>
+    </div>
+
+    <!-- FORCES -->
+    <div class="section">
+      <div class="h"><span class="n">Field forces</span></div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Flow <span class="val" id="flowVal">0.3</span></span>
+          <input type="range" id="flow" min="0" max="2" step="0.05" value="0.3">
+        </label>
+        <label class="field">
+          <span class="lab">Flow scale <span class="val" id="flowScaleVal">2.2</span></span>
+          <input type="range" id="flowScale" min="0.6" max="6" step="0.1" value="2.2">
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Attractor <span class="val" id="attractVal">0.0</span></span>
+          <input type="range" id="attract" min="0" max="2" step="0.05" value="0">
+        </label>
+        <label class="field">
+          <span class="lab">Spin <span class="val" id="spinVal">0.0</span></span>
+          <input type="range" id="spin" min="-2" max="2" step="0.05" value="0">
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Wander <span class="val" id="wanderVal">0.25</span></span>
+          <input type="range" id="wander" min="0" max="1.5" step="0.05" value="0.25">
+        </label>
+        <label class="field">
+          <span class="lab">Edges</span>
+          <select id="edges">
+            <option value="wrap" selected>Wrap</option>
+            <option value="bounce">Bounce</option>
+            <option value="steer">Steer back</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <!-- LOOK -->
+    <div class="section">
+      <div class="h"><span class="n">Look</span></div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Trail <span class="val" id="trailVal">9</span></span>
+          <input type="range" id="trail" min="0" max="28" step="1" value="9">
+        </label>
+        <label class="field">
+          <span class="lab">Beam size <span class="val" id="sizeVal">1.0</span></span>
+          <input type="range" id="size" min="0.3" max="2.4" step="0.05" value="1.0">
+        </label>
+      </div>
+      <label class="field">
+        <span class="lab">Beam length <span class="val" id="lengthVal">1.00</span></span>
+        <span class="sub">stretches the long axis only</span>
+        <input type="range" id="length" min="0.3" max="4" step="0.05" value="1">
+      </label>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Bloom <span class="val" id="bloomVal">7</span></span>
+          <input type="range" id="bloom" min="0" max="24" step="1" value="7">
+        </label>
+        <label class="field">
+          <span class="lab">Corner <span class="val" id="cornerVal">0.00</span></span>
+          <span class="sub">SVG export; 0 = sharp</span>
+          <input type="range" id="corner" min="0" max="1" step="0.05" value="0">
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Glow <span class="val" id="intensityVal">0.75</span></span>
+          <span class="sub">beam brightness</span>
+          <input type="range" id="intensity" min="0.15" max="1" step="0.05" value="0.75">
+        </label>
+        <label class="field">
+          <span class="lab">Blend</span>
+          <select id="blend">
+            <option value="screen" selected>Screen (soft)</option>
+            <option value="lighten">Lighten</option>
+            <option value="lighter">Additive (bright)</option>
+            <option value="source-over">Normal</option>
+          </select>
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Colour by</span>
+          <select id="colorMode">
+            <option value="species" selected>Species</option>
+            <option value="speed">Speed</option>
+            <option value="density">Local density</option>
+            <option value="heading">Heading</option>
+          </select>
+        </label>
+        <label class="field">
+          <span class="lab">Background</span>
+          <input type="color" id="bg" value="#0A0B0D">
+        </label>
+      </div>
+    </div>
+
+    <!-- PALETTE -->
+    <div class="section">
+      <div class="h"><span class="n">Palette</span></div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <!-- SEED -->
+    <div class="section">
+      <div class="h"><span class="n">Seed</span> — determinism</div>
+      <div class="btn-grid">
+        <input type="number" id="seed" value="88" min="0" step="1">
+        <button class="btn" id="randSeed">Randomize</button>
+      </div>
+      <div class="reproduce" id="reproduce"></div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="section">
+      <div class="h"><span class="n">Export</span> — freezes current frame</div>
+      <div class="btn-grid">
+        <button class="btn" id="dlSvg">Download SVG</button>
+        <button class="btn" id="dlPng">Download PNG</button>
+        <button class="btn" id="copySvg">Copy SVG</button>
+        <button class="btn" id="copyCfg">Copy recipe</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const PALETTE={
+  magenta:{base:"#B832D2",hi:"#F6D8FA"}, cyan:{base:"#32C5D2",hi:"#D8F7FA"},
+  emerald:{base:"#2ED2A0",hi:"#D8FAF0"}, amber:{base:"#D2A032",hi:"#FAF0D8"},
+  coral:{base:"#E24C4C",hi:"#FAD8D8"},   indigo:{base:"#6A32D2",hi:"#E2D8FA"},
+  lime:{base:"#A8D232",hi:"#F2FAD8"},
+};
+const PAL_KEYS=Object.keys(PALETTE);
+const VIEW=800;
+
+const state={
+  seed:88, preset:"murmuration", count:260, species:1,
+  sep:1.4, ali:1.1, coh:0.9, perc:46, speed:3.0,
+  flow:0.3, flowScale:2.2, attract:0, spin:0, wander:0.25, edges:"wrap",
+  trail:9, size:1.0, bloom:7, corner:0, colorMode:"species", bg:"#0A0B0D",
+  blend:"screen", intensity:0.75, length:1.0, gravity:0, lattice:0,
+  latGap:40, perpGap:26, stackTilt:0.5, stackMode:"scatter", org:null,
+  colors:["cyan","emerald","indigo"],
+};
+
+/* ---------- deterministic helpers ---------- */
+const lerp=(a,b,t)=>a+(b-a)*t, clamp=(v,l,h)=>Math.min(h,Math.max(l,v)), TAU=Math.PI*2;
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+function hash2(ix,iy,seed){let h=(ix|0)*374761393+(iy|0)*668265263+(seed|0)*2147483647;h=(h^(h>>>13));h=Math.imul(h,1274126177);return((h^(h>>>16))>>>0)/4294967296;}
+function vnoise(x,y,s){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;const a=hash2(ix,iy,s),b=hash2(ix+1,iy,s),c=hash2(ix,iy+1,s),d=hash2(ix+1,iy+1,s);const u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);return lerp(lerp(a,b,u),lerp(c,d,u),v);}
+function fbm(x,y,s,o){let amp=.5,f=1,sum=0,n=0;for(let i=0;i<o;i++){sum+=amp*vnoise(x*f,y*f,s+i*1013);n+=amp;amp*=.5;f*=2;}return sum/n;}
+function hexA(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;}
+
+/* ---------- swarm engine ---------- */
+let agents=[], stepN=0, wanderRng=mulberry32(1), grid=new Map(), colH=[], gCols=16;
+let basins=[], nodes=[], centroids=[], hubs=[];   // organisation-mode structures (descent / route / partition / compile)
+const HF_BINS=200, hfBW=VIEW/HF_BINS; let heightField=new Array(HF_BINS).fill(VIEW);
+function initSwarm(){
+  const rng=mulberry32(state.seed>>>0);
+  wanderRng=mulberry32((state.seed*2654435761)>>>0);
+  agents=[];
+  const grav=state.gravity>0;
+  for(let i=0;i<state.count;i++){
+    let x,y,vx,vy;
+    if(grav){ const ang=rng()*TAU, sp=state.speed*0.5, hw=state.latGap*0.5;
+      x = state.stackMode==="drift" ? clamp(VIEW*0.5+(rng()+rng()+rng()-1.5)*300, hw, VIEW-hw) : rng()*VIEW;  // drift = bell-curve toward centre → dune
+      y=-20-rng()*VIEW*0.7; vx=Math.cos(ang)*sp; vy=Math.abs(Math.sin(ang))*sp*0.6+sp*0.2; }
+    else { const a=rng()*TAU, sp=state.speed*(0.4+rng()*0.6); x=rng()*VIEW; y=rng()*VIEW; vx=Math.cos(a)*sp; vy=Math.sin(a)*sp; }
+    agents.push({x,y,vx,vy, sp:i%state.species, hist:[], landed:false, col:-1, settle:0, age:0,
+      jx:(rng()*2-1), jy:(rng()*2-1), jr:(rng()*2-1), restU:(rng()*2-1), landAng:0, hd:Math.atan2(vy,vx), slow:0});
+  }
+  gCols = grav ? clamp(Math.floor(VIEW/state.latGap),2,90) : clamp(Math.round(Math.sqrt(state.count)),4,40);
+  colH=new Array(gCols).fill(0);
+  heightField=new Array(HF_BINS).fill(VIEW);
+  stepN=0;
+  if(state.org){                                                       // seed the organisation structures + per-agent targets
+    const r2=mulberry32((state.seed^0x9E3779B1)>>>0);
+    basins=[]; for(let i=0;i<5;i++) basins.push({x:(0.15+0.7*r2())*VIEW, y:(0.18+0.64*r2())*VIEW});
+    nodes=[];  for(let i=0;i<7;i++) nodes.push({x:(0.1+0.8*r2())*VIEW, y:(0.1+0.8*r2())*VIEW});
+    hubs=[];   for(let i=0;i<5;i++) hubs.push({x:(0.22+0.56*r2())*VIEW, y:(0.26+0.48*r2())*VIEW});   // optimise clusters
+    const cols=Math.ceil(Math.sqrt(agents.length)), rows=Math.ceil(agents.length/cols);
+    const M=0.14*VIEW, span=VIEW-2*M, dc=Math.ceil(Math.sqrt(agents.length)), dr=Math.ceil(agents.length/dc);  // silicon die grid
+    for(let i=0;i<agents.length;i++){ const a=agents[i], kx=r2(), ky=r2();
+      a.key=kx;
+      a.tx=VIEW*0.06+kx*VIEW*0.88; a.ty=VIEW*0.12+ky*VIEW*0.76;                 // sort / strata target
+      const gc=i%cols, gr=(i/cols)|0; a.lx=(gc+0.5)/cols*VIEW; a.ly=(gr+0.5)/rows*VIEW;  // anneal lattice slot
+      const dcx=i%dc, dcy=(i/dc)|0; a.gx=M+(dcx+0.5)/dc*span; a.gy=M+(dcy+0.5)/dr*span;   // compile: silicon core slot
+      a.basin=(r2()*basins.length)|0;                                          // descent basin
+      a.hub=(r2()*hubs.length)|0;                                              // compile optimise hub
+      a.node=(r2()*nodes.length)|0; a.stride=1+((r2()*(nodes.length-1))|0);    // route hop sequence
+      if(state.org==="sort") a.sp=Math.min(state.species-1,(kx*state.species)|0);
+      else if(state.org==="strata") a.sp=Math.min(state.species-1,(ky*state.species)|0);
+      else if(state.org==="descent") a.sp=a.basin%state.species;
+      else if(state.org==="anneal") a.sp=(gc+gr)%state.species;
+      else if(state.org==="compile") a.sp=a.hub%state.species;                 // colour by optimise group → shown mapping onto silicon
+      else if(state.org==="flux"){ const lane=Math.min(state.species-1,(kx*state.species)|0); a.laneY=(lane+0.5)/state.species*VIEW; a.sp=lane; }  // inference lane by value
+    }
+  }
+}
+function flowAngle(x,y){
+  const s=state.flowScale, nx=x/VIEW, ny=y/VIEW, e=0.002;
+  const dPdx=(fbm(nx*s+e,ny*s,state.seed,3)-fbm(nx*s-e,ny*s,state.seed,3));
+  const dPdy=(fbm(nx*s,ny*s+e,state.seed,3)-fbm(nx*s,ny*s-e,state.seed,3));
+  return Math.atan2(-dPdx,dPdy);
+}
+function buildGrid(){
+  grid.clear(); const cs=Math.max(18,state.perc);
+  for(let i=0;i<agents.length;i++){
+    const a=agents[i], key=((a.x/cs)|0)*8192+((a.y/cs)|0);
+    let arr=grid.get(key); if(!arr){arr=[];grid.set(key,arr);} arr.push(i);
+  }
+}
+function step(){
+  buildGrid();
+  if(state.org==="partition"){ const sum=[]; for(let s=0;s<state.species;s++) sum[s]={x:0,y:0,n:0};
+    for(const a of agents){ const S=sum[a.sp]; if(S){ S.x+=a.x; S.y+=a.y; S.n++; } }
+    centroids=[]; for(let s=0;s<state.species;s++) centroids[s]=sum[s].n?{x:sum[s].x/sum[s].n,y:sum[s].y/sum[s].n}:null;
+  }
+  const R=state.perc, R2=R*R, sepR2=(R*0.5)*(R*0.5), cs=Math.max(18,R);
+  const maxF=0.25, cx=VIEW/2, cy=VIEW/2;
+  const deposition = state.gravity>0 && state.lattice>0, cell=VIEW/gCols;
+  for(let i=0;i<agents.length;i++){
+    const a=agents[i];
+    if(a.landed) continue;
+    let cX=0,cY=0,aX=0,aY=0,sX=0,sY=0,cN=0,sN=0;
+    const gx=(a.x/cs)|0, gy=(a.y/cs)|0;
+    for(let ox=-1;ox<=1;ox++) for(let oy=-1;oy<=1;oy++){
+      const arr=grid.get((gx+ox)*8192+(gy+oy)); if(!arr) continue;
+      for(let k=0;k<arr.length;k++){
+        const j=arr[k]; if(j===i) continue; const b=agents[j];
+        if(b.landed) continue;
+        const dx=b.x-a.x, dy=b.y-a.y, d2=dx*dx+dy*dy;
+        if(d2>0 && d2<R2){
+          if(d2<sepR2){ const inv=1/Math.sqrt(d2); sX-=dx*inv; sY-=dy*inv; sN++; }
+          if(b.sp===a.sp){ cX+=b.x; cY+=b.y; aX+=b.vx; aY+=b.vy; cN++; }
+        }
+      }
+    }
+    let fx=0, fy=0;
+    if(cN){ // alignment
+      let mx=aX/cN,my=aY/cN; const ml=Math.hypot(mx,my)||1; mx=mx/ml*state.speed-a.vx; my=my/ml*state.speed-a.vy;
+      fx+=mx*state.ali*0.12; fy+=my*state.ali*0.12;
+      // cohesion
+      let dx=cX/cN-a.x, dy=cY/cN-a.y; const dl=Math.hypot(dx,dy)||1; dx=dx/dl*state.speed-a.vx; dy=dy/dl*state.speed-a.vy;
+      fx+=dx*state.coh*0.05; fy+=dy*state.coh*0.05;
+    }
+    if(sN){ const sl=Math.hypot(sX,sY)||1; const dx=sX/sl*state.speed-a.vx, dy=sY/sl*state.speed-a.vy; fx+=dx*state.sep*0.16; fy+=dy*state.sep*0.16; }
+    if(state.flow>0){ const fa=flowAngle(a.x,a.y); fx+=Math.cos(fa)*state.flow*0.4; fy+=Math.sin(fa)*state.flow*0.4; }
+    if(state.attract!==0||state.spin!==0){ let dx=cx-a.x,dy=cy-a.y; const dl=Math.hypot(dx,dy)||1; dx/=dl;dy/=dl;
+      fx+=dx*state.attract*0.5+(-dy)*state.spin*0.5; fy+=dy*state.attract*0.5+(dx)*state.spin*0.5; }
+    if(state.wander>0){ const w=(wanderRng()-0.5)*state.wander*0.6; const ca=Math.cos(w),sa=Math.sin(w); const nvx=a.vx*ca-a.vy*sa, nvy=a.vx*sa+a.vy*ca; fx+=(nvx-a.vx); fy+=(nvy-a.vy); }
+    // limit force
+    const fl=Math.hypot(fx,fy); if(fl>maxF){ fx=fx/fl*maxF; fy=fy/fl*maxF; }
+    a.vx+=fx; a.vy+=fy;
+    // ---- agentic organisation modes ----
+    if(state.org){
+      const o=state.org;
+      if(o==="sort"){ a.vx+=(a.tx-a.x)*0.035; a.vy+=(a.ty-a.y)*0.02; a.vx*=0.85; a.vy*=0.88; }
+      else if(o==="strata"){ a.vy+=(a.ty-a.y)*0.035; a.vx+=(a.tx-a.x)*0.02; a.vx*=0.88; a.vy*=0.85; }
+      else if(o==="descent"){ const B=basins[a.basin]; if(B){ a.vx+=(B.x-a.x)*0.02; a.vy+=(B.y-a.y)*0.02; } a.vx*=0.9; a.vy*=0.9; }
+      else if(o==="partition"){ const C=centroids[a.sp]; if(C){ a.vx+=(C.x-a.x)*0.02; a.vy+=(C.y-a.y)*0.02; } a.vx*=0.93; a.vy*=0.93; }
+      else if(o==="anneal"){ const cool=clamp(stepN/480,0,1); a.vx+=(a.lx-a.x)*0.05*cool; a.vy+=(a.ly-a.y)*0.05*cool; const heat=(1-cool)*state.speed; a.vx+=(wanderRng()-0.5)*heat; a.vy+=(wanderRng()-0.5)*heat; a.vx*=0.9; a.vy*=0.9; }
+      else if(o==="route"){ const N=nodes[a.node]; if(N){ const dx=N.x-a.x,dy=N.y-a.y,d=Math.hypot(dx,dy)||1; a.vx+=dx/d*state.speed*0.5; a.vy+=dy/d*state.speed*0.5; if(d<20) a.node=(a.node+a.stride)%nodes.length; } }
+      else if(o==="compile"){                                             // the yasp pipeline: ingest → sort → optimise → map to silicon → loop
+        const CYC=820, t=stepN%CYC; let tx,ty,pull,turb;
+        if(t<160){ tx=VIEW/2; ty=VIEW/2; pull=0.002; turb=1.0; }           // INGEST — raw workload streams in as chaos
+        else if(t<340){ tx=a.tx; ty=a.ty; pull=0.045; turb=0.12; }         // SORT — rank / analyse the ops
+        else if(t<520){ const H=hubs[a.hub]; tx=H.x; ty=H.y; pull=0.045; turb=0.10; }  // OPTIMISE — fold into optimal groups
+        else { tx=a.gx; ty=a.gy; pull=0.07; turb=0.03; }                   // MAP — place onto the silicon core grid (hold)
+        a.vx+=(tx-a.x)*pull; a.vy+=(ty-a.y)*pull; a.vx*=0.86; a.vy*=0.86;
+        if(turb>0){ const fa=flowAngle(a.x,a.y); a.vx+=Math.cos(fa)*turb*state.speed*0.16; a.vy+=Math.sin(fa)*turb*state.speed*0.16; a.vx+=(wanderRng()-0.5)*turb*0.7; a.vy+=(wanderRng()-0.5)*turb*0.7; }
+        const mapPhase=t>=520; const mh=mapPhase?0:Math.atan2(a.vy,a.vx);  // align to clean traces on the die
+        a.hd += Math.atan2(Math.sin(mh-a.hd),Math.cos(mh-a.hd))*(mapPhase?0.1:0.25);
+      }
+      else if(o==="flux"){                                                // live inference: chaos streams in left → optimised lanes stream out right → loops
+        const prog=clamp(a.x/VIEW,0,1);
+        a.x += state.speed; if(a.x>VIEW){ a.x-=VIEW; a.y=wanderRng()*VIEW; } a.vx=0;   // conveyor + re-inject fresh at the left
+        a.vy += (a.laneY-a.y)*0.06*prog; a.vy*=0.88;                        // resolve into its lane, harder downstream
+        const turb=1-prog; a.vy += Math.sin(flowAngle(a.x,a.y))*turb*state.speed*0.3 + (wanderRng()-0.5)*turb*1.4;  // chaotic at entry
+        a.hd += Math.atan2(Math.sin(-a.hd),Math.cos(-a.hd))*0.15;           // beams point along the flow
+      }
+      if(o!=="compile" && o!=="flux"){ const mh=Math.atan2(a.vy,a.vx); a.hd += Math.atan2(Math.sin(mh-a.hd),Math.cos(mh-a.hd))*0.22; }  // smooth heading for the rest
+    }
+    // grid snap (lattice, no gravity)
+    if(state.lattice>0){
+      a.vx+=((Math.floor(a.x/cell)+0.5)*cell-a.x)*state.lattice*0.03;
+      a.vy+=((Math.floor(a.y/cell)+0.5)*cell-a.y)*state.lattice*0.03;
+      a.vx*=0.9; a.vy*=0.9;
+    }
+    // speed clamp
+    const s=Math.hypot(a.vx,a.vy)||1, mx2=state.speed; if(s>mx2){ a.vx=a.vx/s*mx2; a.vy=a.vy/s*mx2; } else if(s<mx2*0.35 && !state.org && state.gravity<=0 && state.lattice<=0){ a.vx=a.vx/s*mx2*0.35; a.vy=a.vy/s*mx2*0.35; }
+    a.x+=a.vx; a.y+=a.vy;
+    // edges
+    if(state.edges==="wrap"){ if(a.x<0)a.x+=VIEW; if(a.x>=VIEW)a.x-=VIEW; if(a.y<0)a.y+=VIEW; if(a.y>=VIEW)a.y-=VIEW; }
+    else if(state.edges==="bounce"){ if(a.x<0){a.x=0;a.vx=-a.vx;} if(a.x>VIEW){a.x=VIEW;a.vx=-a.vx;} if(a.y<0){a.y=0;a.vy=-a.vy;} if(a.y>VIEW){a.y=VIEW;a.vy=-a.vy;} }
+    else { const m=60; if(a.x<m)a.vx+=0.3; if(a.x>VIEW-m)a.vx-=0.3; if(a.y<m)a.vy+=0.3; if(a.y>VIEW-m)a.vy-=0.3; a.x=clamp(a.x,-20,VIEW+20); a.y=clamp(a.y,-20,VIEW+20); }
+    // trail history (skip huge jumps from wrap)
+    if(state.trail>0){ const last=a.hist[a.hist.length-1]; if(!last||Math.abs(last.x-a.x)<VIEW*0.5&&Math.abs(last.y-a.y)<VIEW*0.5) a.hist.push({x:a.x,y:a.y,h:Math.atan2(a.vy,a.vx)}); else a.hist.length=0; while(a.hist.length>state.trail+1)a.hist.shift(); }
+    else a.hist.length=0;
+  }
+  stepN++;
+}
+
+/* ---------- density (for colour mode) ---------- */
+function localDensity(a){ const cs=Math.max(18,state.perc), gx=(a.x/cs)|0, gy=(a.y/cs)|0; let n=0;
+  for(let ox=-1;ox<=1;ox++) for(let oy=-1;oy<=1;oy++){ const arr=grid.get((gx+ox)*8192+(gy+oy)); if(arr)n+=arr.length; } return n; }
+function colorKeyFor(a){
+  const cols=state.colors.length?state.colors:["cyan"];
+  if(state.colorMode==="species") return cols[a.sp%cols.length];
+  if(state.colorMode==="speed"){ const s=Math.hypot(a.vx,a.vy)/state.speed; return cols[clamp(Math.floor(s*cols.length),0,cols.length-1)]; }
+  if(state.colorMode==="heading"){ const h=(Math.atan2(a.vy,a.vx)+Math.PI)/TAU; return cols[clamp(Math.floor(h*cols.length),0,cols.length-1)]; }
+  const d=clamp(localDensity(a)/22,0,1); return cols[clamp(Math.floor(d*cols.length),0,cols.length-1)];
+}
+
+/* ---------- canvas rendering ---------- */
+const cv=document.getElementById("view"), ctx=cv.getContext("2d");
+const buf=document.createElement("canvas"); buf.width=VIEW; buf.height=VIEW; const bctx=buf.getContext("2d");
+const SPL=100, SPT=34; let sprites={};
+function buildSprites(){
+  sprites={};
+  (state.colors.length?state.colors:["cyan"]).forEach(k=>{
+    const {base,hi}=PALETTE[k], c=document.createElement("canvas"); c.width=SPL;c.height=SPT;
+    const g=c.getContext("2d"), grad=g.createLinearGradient(0,0,0,SPT);
+    grad.addColorStop(0,hexA(base,0)); grad.addColorStop(0.2,base); grad.addColorStop(0.47,hi);
+    grad.addColorStop(0.5,"#ffffff"); grad.addColorStop(0.53,hi); grad.addColorStop(0.8,base); grad.addColorStop(1,hexA(base,0));
+    g.fillStyle=grad; g.fillRect(0,0,SPL,SPT); sprites[k]=c;
+  });
+}
+function drawSprite(g,key,x,y,h,scale,alpha){
+  const sp=sprites[key]||sprites[state.colors[0]]; if(!sp)return;
+  g.globalAlpha=alpha*state.intensity; g.translate(x,y); g.rotate(h);
+  const w=SPL*scale*state.length, t=SPT*scale;
+  g.drawImage(sp,-w/2,-t/2,w,t);
+  g.setTransform(1,0,0,1,0,0);
+}
+function draw(){
+  bctx.setTransform(1,0,0,1,0,0); bctx.clearRect(0,0,VIEW,VIEW);
+  bctx.globalCompositeOperation=state.blend;
+  const sc=state.size, dep=(state.gravity>0&&state.lattice>0)||!!state.org;
+  for(let i=0;i<agents.length;i++){
+    const a=agents[i], key=colorKeyFor(a);
+    if(state.trail>0 && a.hist.length>1){
+      for(let t=0;t<a.hist.length-1;t++){ const p=a.hist[t], f=(t+1)/a.hist.length; drawSprite(bctx,key,p.x,p.y,p.h,sc*(0.5+0.5*f),0.5*f*f); }
+    }
+    const hd = dep ? (a.landed ? (a.landAng||0) : (a.hd||0)) : (a.landed?(a.rot||0):Math.atan2(a.vy,a.vx)*(1-(a.settle||0)));
+    drawSprite(bctx,key,a.x,a.y,hd,sc,0.95);
+  }
+  bctx.globalCompositeOperation="source-over"; bctx.globalAlpha=1;
+  ctx.setTransform(1,0,0,1,0,0); ctx.globalAlpha=1;
+  ctx.fillStyle=state.bg; ctx.fillRect(0,0,VIEW,VIEW);
+  if(state.bloom>0){ ctx.filter=`blur(${state.bloom}px)`; ctx.drawImage(buf,0,0); ctx.filter="none"; }
+  ctx.drawImage(buf,0,0);
+  $("barStep").textContent=stepN;
+}
+
+/* ---------- loop ---------- */
+let playing=true, raf=0;
+function frame(){ if(playing){ step(); draw(); } raf=requestAnimationFrame(frame); }
+
+/* ---------- SVG export (freeze current frame) ---------- */
+function buildSVG(){
+  const cols=state.colors.length?state.colors:["cyan"];
+  const grads=cols.map(k=>{const{base,hi}=PALETTE[k];return `<linearGradient id="g-${k}" x1="0.5" y1="0" x2="0.5" y2="1"><stop stop-color="${base}" stop-opacity="0"/><stop offset="0.2" stop-color="${base}"/><stop offset="0.47" stop-color="${hi}"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="0.53" stop-color="${hi}"/><stop offset="0.8" stop-color="${base}"/><stop offset="1" stop-color="${base}" stop-opacity="0"/></linearGradient>`;}).join("");
+  const bloom=state.bloom>0?`<filter id="bloom" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceGraphic" stdDeviation="${state.bloom}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`:"";
+  const bAttr=state.bloom>0?` filter="url(#bloom)"`:"";
+  const L=SPL*state.size*state.length, T=SPT*state.size, rx=(state.corner*T*0.5).toFixed(1);
+  const sb={lighter:"plus-lighter",screen:"screen",lighten:"lighten","source-over":"normal"}[state.blend]||"screen";
+  let out="";
+  const emit=(x,y,h,scale,op,key)=>{ const w=L*scale, t=T*scale; out+=`<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(h*180/Math.PI).toFixed(1)})" opacity="${(op*state.intensity).toFixed(3)}" style="mix-blend-mode:${sb}"><rect x="${(-w/2).toFixed(1)}" y="${(-t/2).toFixed(1)}" width="${w.toFixed(1)}" height="${t.toFixed(1)}" rx="${rx}" fill="url(#g-${key})"/></g>`; };
+  const depv=(state.gravity>0&&state.lattice>0)||!!state.org;
+  for(const a of agents){ const key=colorKeyFor(a);
+    if(state.trail>0 && a.hist.length>1) for(let t=0;t<a.hist.length-1;t++){ const p=a.hist[t], f=(t+1)/a.hist.length; emit(p.x,p.y,p.h,0.5+0.5*f,0.5*f*f,key); }
+    const hd = depv ? (a.landed ? (a.landAng||0) : (a.hd||0)) : (a.landed?(a.rot||0):Math.atan2(a.vy,a.vx)*(1-(a.settle||0)));
+    emit(a.x,a.y,hd,1,0.95,key);
+  }
+  return `<svg viewBox="0 0 ${VIEW} ${VIEW}" xmlns="http://www.w3.org/2000/svg"><defs>${grads}${bloom}</defs><rect width="${VIEW}" height="${VIEW}" fill="${state.bg}"/><g style="isolation:isolate"${bAttr}>${out}</g></svg>`;
+}
+
+/* ---------- presets ---------- */
+const PRESETS={
+  compile:{org:"compile",sep:0.55,ali:0,coh:0,perc:38,speed:6.0,flow:0,attract:0,spin:0,wander:0,edges:"bounce",species:5,trail:5,size:0.8,length:0.55,bloom:5,intensity:0.95,blend:"screen",count:300,colorMode:"species",colors:["cyan","emerald","indigo","amber","coral"]},
+  flux:{org:"flux",sep:0.45,ali:0,coh:0,perc:30,speed:5.0,flow:0,flowScale:2.6,attract:0,spin:0,wander:0,edges:"wrap",species:6,trail:8,size:0.7,length:0.7,bloom:5,intensity:0.92,blend:"screen",count:340,colorMode:"species",colors:["magenta","indigo","cyan","emerald","amber","coral"]},
+  sort:{org:"sort",sep:0.5,ali:0,coh:0,perc:34,speed:5.0,flow:0,attract:0,spin:0,wander:0.05,edges:"bounce",species:6,trail:0,size:0.9,length:0.5,bloom:2,intensity:0.95,blend:"screen",count:280,colorMode:"species",colors:["indigo","magenta","coral","amber","emerald","cyan"]},
+  strata:{org:"strata",sep:0.5,ali:0,coh:0,perc:34,speed:5.0,flow:0,attract:0,spin:0,wander:0.05,edges:"bounce",species:6,trail:0,size:0.9,length:0.5,bloom:2,intensity:0.95,blend:"screen",count:280,colorMode:"species",colors:["cyan","emerald","amber","coral","magenta","indigo"]},
+  descent:{org:"descent",sep:0.7,ali:0,coh:0,perc:40,speed:5.0,flow:0,attract:0,spin:0,wander:0.15,edges:"bounce",species:5,trail:14,size:0.8,length:0.6,bloom:5,intensity:0.9,blend:"screen",count:280,colorMode:"species",colors:["cyan","emerald","indigo","amber","coral"]},
+  partition:{org:"partition",sep:0.9,ali:0.3,coh:0.5,perc:60,speed:4.0,flow:0,attract:0,spin:0,wander:0.1,edges:"bounce",species:5,trail:0,size:0.85,length:0.5,bloom:3,intensity:0.92,blend:"screen",count:300,colorMode:"species",colors:["cyan","coral","emerald","amber","indigo"]},
+  anneal:{org:"anneal",sep:0.6,ali:0,coh:0,perc:34,speed:6.0,flow:0,attract:0,spin:0,wander:0,edges:"bounce",species:3,trail:0,size:0.85,length:0.5,bloom:3,intensity:0.95,blend:"screen",count:256,colorMode:"species",colors:["cyan","emerald","indigo"]},
+  route:{org:"route",sep:0.6,ali:0,coh:0,perc:30,speed:6.0,flow:0,attract:0,spin:0,wander:0.05,edges:"bounce",species:4,trail:18,size:0.7,length:0.5,bloom:5,intensity:0.9,blend:"screen",count:220,colorMode:"species",colors:["cyan","emerald","indigo","amber"]},
+  murmuration:{sep:1.4,ali:1.3,coh:0.9,perc:46,speed:3.0,flow:0.25,attract:0,spin:0,wander:0.25,edges:"wrap",species:1,trail:10},
+  vortex:{sep:1.2,ali:0.7,coh:0.5,perc:52,speed:3.2,flow:0.15,attract:0.35,spin:1.1,wander:0.2,edges:"steer",species:1,trail:14},
+  migrate:{sep:1.3,ali:1.5,coh:0.8,perc:44,speed:3.6,flow:0.9,attract:0,spin:0,wander:0.15,edges:"wrap",species:1,trail:12},
+  diffuse:{sep:2.4,ali:0.3,coh:0.1,perc:40,speed:2.2,flow:0.1,attract:0,spin:0,wander:0.5,edges:"bounce",species:1,trail:4},
+  territorial:{sep:1.8,ali:1.0,coh:1.1,perc:48,speed:2.8,flow:0.1,attract:0,spin:0,wander:0.3,edges:"wrap",species:3,trail:7},
+  orbit:{sep:1.0,ali:0.5,coh:0.3,perc:40,speed:3.0,flow:0,attract:0.9,spin:0.9,wander:0.1,edges:"steer",species:2,trail:16},
+  ribbon:{sep:0.8,ali:2.2,coh:0.7,perc:40,speed:3.8,flow:0.7,attract:0,spin:0,wander:0.08,edges:"wrap",species:1,trail:20},
+  galaxy:{sep:1.1,ali:0.8,coh:1.0,perc:54,speed:2.8,flow:0.05,attract:0.6,spin:0.7,wander:0.12,edges:"steer",species:1,trail:18},
+  shoal:{sep:1.9,ali:1.2,coh:1.8,perc:64,speed:2.6,flow:0.05,attract:0,spin:0,wander:0.3,edges:"steer",species:1,trail:8},
+  pinwheel:{sep:1.2,ali:0.6,coh:0.7,perc:50,speed:3.0,flow:0.05,flowScale:2.2,attract:0.15,spin:1.6,wander:0.12,edges:"steer",species:1,trail:16},
+  serpentine:{sep:0.9,ali:1.6,coh:0.6,perc:42,speed:3.2,flow:1.2,flowScale:1.3,attract:0,spin:0,wander:0.18,edges:"wrap",species:1,trail:22},
+  turbulence:{sep:1.1,ali:1.0,coh:0.6,perc:44,speed:3.4,flow:1.3,flowScale:4.5,attract:0,spin:0,wander:0.2,edges:"wrap",species:1,trail:12},
+  array:{sep:2.6,ali:0.25,coh:0.15,perc:72,speed:1.8,flow:0.08,flowScale:2.5,attract:0.05,spin:0,wander:0.12,edges:"wrap",species:1,trail:4},
+  sequence:{sep:0.45,ali:2.0,coh:1.4,perc:30,speed:3.2,flow:0.35,flowScale:2.0,attract:0,spin:0,wander:0.1,edges:"wrap",species:1,trail:22},
+  braid:{sep:0.8,ali:1.9,coh:1.3,perc:34,speed:3.2,flow:0.5,flowScale:1.8,attract:0,spin:0,wander:0.12,edges:"wrap",species:3,trail:20},
+};
+function applyPreset(name){ const p=PRESETS[name]; if(!p)return;
+  state.gravity=0; state.lattice=0; state.size=1; state.length=1; state.bloom=7; state.intensity=0.75; state.blend="screen"; state.latGap=40; state.perpGap=26; state.stackTilt=0.5; state.org=null; state.flow=0; state.attract=0; state.spin=0;
+  Object.assign(state,p); state.preset=name; syncUI(); buildSprites(); initSwarm(); }
+
+/* ---------- UI ---------- */
+const $=id=>document.getElementById(id);
+function syncUI(){
+  const set=(id,v,fmt)=>{const el=$(id);if(el)el.value=v;const o=$(id+"Val");if(o)o.textContent=fmt?fmt(v):v;};
+  set("count",state.count); set("species",state.species); set("sep",state.sep,f2); set("ali",state.ali,f2);
+  set("coh",state.coh,f2); set("perc",state.perc); set("speed",state.speed,f1); set("flow",state.flow,f2);
+  set("flowScale",state.flowScale,f1); set("attract",state.attract,f2); set("spin",state.spin,f2);
+  set("wander",state.wander,f2); set("trail",state.trail); set("size",state.size,f2); set("bloom",state.bloom);
+  set("corner",state.corner,f2); set("intensity",state.intensity,f2); set("length",state.length,f2);
+  $("edges").value=state.edges; $("colorMode").value=state.colorMode; $("preset").value=state.preset; $("bg").value=state.bg; $("blend").value=state.blend;
+  $("barBeh").textContent=state.preset; $("barN").textContent=state.count; $("barSeed").textContent=state.seed;
+  $("reproduce").innerHTML=`<b>recipe</b> · ${state.preset} · seed ${state.seed} · agents ${state.count} · sep ${state.sep} ali ${state.ali} coh ${state.coh} · perc ${state.perc} · flow ${state.flow}/${state.flowScale} · attract ${state.attract} spin ${state.spin} · trail ${state.trail} · [${state.colors.join(", ")}]`;
+}
+const f1=v=>(+v).toFixed(1), f2=v=>(+v).toFixed(2);
+
+function buildSwatches(){
+  const wrap=$("swatches"); wrap.innerHTML="";
+  PAL_KEYS.forEach(key=>{const{base,hi}=PALETTE[key];const el=document.createElement("div");
+    el.className="sw"+(state.colors.includes(key)?" on":"");el.title=key;
+    el.innerHTML=`<div class="glow" style="background:radial-gradient(60% 100% at 50% 50%, #fff, ${hi} 30%, ${base} 55%, ${base}00 100%)"></div><div class="dot"></div>`;
+    el.addEventListener("click",()=>{const i=state.colors.indexOf(key);if(i>=0){if(state.colors.length>1)state.colors.splice(i,1);}else state.colors.push(key);buildSwatches();buildSprites();});
+    wrap.appendChild(el);});
+}
+
+function bindRange(id,key,fmt,live){const el=$(id),out=$(id+"Val");el.addEventListener("input",()=>{const v=parseFloat(el.value);state[key]=v;if(out)out.textContent=fmt?fmt(v):v; if(live)live(); syncMeta();});}
+function syncMeta(){$("barN").textContent=state.count;$("reproduce").innerHTML=$("reproduce").innerHTML;}
+bindRange("count","count",null,()=>{initSwarm();});
+bindRange("species","species",null,()=>{initSwarm();});
+bindRange("sep","sep",f2); bindRange("ali","ali",f2); bindRange("coh","coh",f2);
+bindRange("perc","perc"); bindRange("speed","speed",f1);
+bindRange("flow","flow",f2); bindRange("flowScale","flowScale",f1);
+bindRange("attract","attract",f2); bindRange("spin","spin",f2); bindRange("wander","wander",f2);
+bindRange("trail","trail"); bindRange("size","size",f2); bindRange("bloom","bloom"); bindRange("corner","corner",f2);
+bindRange("intensity","intensity",f2);
+bindRange("length","length",f2);
+$("blend").addEventListener("change",e=>state.blend=e.target.value);
+$("edges").addEventListener("change",e=>state.edges=e.target.value);
+$("colorMode").addEventListener("change",e=>state.colorMode=e.target.value);
+$("bg").addEventListener("input",e=>state.bg=e.target.value);
+$("preset").addEventListener("change",e=>applyPreset(e.target.value));
+$("count").addEventListener("input",e=>$("barN").textContent=e.target.value);
+
+$("play").addEventListener("click",()=>{playing=!playing;$("play").textContent=playing?"Pause":"Play";});
+$("step").addEventListener("click",()=>{playing=false;$("play").textContent="Play";step();draw();});
+$("reset").addEventListener("click",()=>{initSwarm();draw();});
+$("seed").addEventListener("input",e=>{const v=parseInt(e.target.value,10);if(!Number.isNaN(v)){state.seed=v;$("barSeed").textContent=v;initSwarm();}});
+$("randSeed").addEventListener("click",()=>{state.seed=Math.floor(Math.random()*1e6);$("seed").value=state.seed;$("barSeed").textContent=state.seed;initSwarm();});
+
+/* ---------- agent ---------- */
+const SCHEMA=`Return ONLY JSON (no prose/markdown) with any of:
+{ "preset":"murmuration"|"vortex"|"migrate"|"diffuse"|"territorial"|"orbit"|"ribbon"|"galaxy"|"shoal"|"pinwheel"|"serpentine"|"turbulence"|"array"|"sequence"|"braid"|"compile"|"flux"|"sort"|"strata"|"descent"|"partition"|"anneal"|"route",
+ "count":30-700,"species":1-5,
+ "sep":0-3,"ali":0-3,"coh":0-3,"perc":14-120,"speed":0.5-6,
+ "flow":0-2,"flowScale":0.6-6,"attract":0-2,"spin":-2-2,"wander":0-1.5,"gravity":0-1,"lattice":0-1,
+ "edges":"wrap"|"bounce"|"steer",
+ "trail":0-28,"size":0.3-2.4,"length":0.3-4,"bloom":0-24,"intensity":0.15-1,"blend":"screen"|"lighten"|"lighter"|"source-over","colorMode":"species"|"speed"|"density"|"heading",
+ "bg":"#RRGGBB","colors":[subset of magenta,cyan,emerald,amber,coral,indigo,lime] }
+Start from the closest preset, then adjust. "calm/slow"->lower speed+wander. "tight flock"->high ali+coh.
+"vortex/swirl"->vortex preset (spin). "flowing/migrating/directional"->migrate (flow up). "spread out"->diffuse.
+"two/three groups repelling/territories"->territorial + species. "orbiting a centre"->orbit.
+"parallel lanes/highways/flowing ribbons/streams"->ribbon. "spiral/galaxy/arms around a core"->galaxy. "tight ball/bait ball/dense blob/shoal"->shoal.
+"pinwheel/spinning arms/rotating radial"->pinwheel. "winding/meandering/snaking/river/serpentine"->serpentine. "turbulent/chaotic/churning/stormy eddies"->turbulence.
+"grid/array/evenly spaced/settled field/ordered"->array. "sequence/queue/pipeline/single-file/threads"->sequence. "braided/interwoven/multiple data streams/woven"->braid. "sort/rank/order by value/spectrum"->sort. "strata/layers/stacked bands/sorted rows/histogram"->strata. "descent/optimise/gradient/find minima/basins/converge"->descent. "partition/cluster/classify/k-means/separate groups"->partition. "anneal/crystallise/cool/order from chaos/settle into lattice"->anneal. "route/network/nodes/packets/graph/traffic"->route. "compile/yasp/pipeline/optimise onto hardware/map to silicon/ingest→sort→optimise→map/what yasp does"->compile. "flux/inference/dataflow/streaming/runtime/tokens flowing/throughput/optimise on the fly"->flux.
+"long trails"->trail high. Colours: cyan=blue, emerald=green, indigo=violet, amber=gold, coral=red, lime=chartreuse, magenta=pink.`;
+function applyConfig(o){
+  const num=(v,l,h)=>clamp(parseFloat(v),l,h);
+  if(PRESETS[o.preset]) Object.assign(state,PRESETS[o.preset]),state.preset=o.preset;
+  if(o.count!=null)state.count=Math.round(num(o.count,30,700));
+  if(o.species!=null)state.species=Math.round(num(o.species,1,5));
+  ["sep","ali","coh","flow","attract","wander","size"].forEach(k=>{if(o[k]!=null)state[k]=num(o[k],k==="size"?0.3:0, k==="size"?2.4:(k==="flow"||k==="attract")?2:3);});
+  if(o.spin!=null)state.spin=num(o.spin,-2,2);
+  if(o.gravity!=null)state.gravity=num(o.gravity,0,1);
+  if(o.lattice!=null)state.lattice=num(o.lattice,0,1);
+  if(o.perc!=null)state.perc=Math.round(num(o.perc,14,120));
+  if(o.speed!=null)state.speed=num(o.speed,0.5,6);
+  if(o.flowScale!=null)state.flowScale=num(o.flowScale,0.6,6);
+  if(o.trail!=null)state.trail=Math.round(num(o.trail,0,28));
+  if(o.bloom!=null)state.bloom=Math.round(num(o.bloom,0,24));
+  if(o.intensity!=null)state.intensity=num(o.intensity,0.15,1);
+  if(o.length!=null)state.length=num(o.length,0.3,4);
+  if(["screen","lighten","lighter","source-over"].includes(o.blend))state.blend=o.blend;
+  if(["wrap","bounce","steer"].includes(o.edges))state.edges=o.edges;
+  if(["species","speed","density","heading"].includes(o.colorMode))state.colorMode=o.colorMode;
+  if(typeof o.bg==="string"&&/^#[0-9a-fA-F]{6}$/.test(o.bg))state.bg=o.bg;
+  if(Array.isArray(o.colors)){const v=o.colors.filter(c=>PAL_KEYS.includes(c));if(v.length)state.colors=[...new Set(v)];}
+  buildSwatches(); buildSprites(); syncUI(); initSwarm();
+}
+async function runAgent(text){
+  const st=$("statusMsg"); st.className="status"; st.textContent="Agent is composing the swarm…";
+  const msg=`Current: ${JSON.stringify({preset:state.preset,count:state.count,species:state.species,sep:state.sep,ali:state.ali,coh:state.coh,perc:state.perc,speed:state.speed,flow:state.flow,flowScale:state.flowScale,attract:state.attract,spin:state.spin,wander:state.wander,gravity:state.gravity,lattice:state.lattice,edges:state.edges,trail:state.trail,size:state.size,bloom:state.bloom,colorMode:state.colorMode,colors:state.colors})}\n\nRequest: "${text}"\n\n${SCHEMA}`;
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:msg}]})});
+    if(!res.ok)throw new Error("API "+res.status);
+    const data=await res.json();
+    const raw=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+    const clean=raw.replace(/```json/gi,"").replace(/```/g,"").trim(), s=clean.indexOf("{"),e=clean.lastIndexOf("}");
+    if(s<0||e<0)throw new Error("no JSON");
+    applyConfig(JSON.parse(clean.slice(s,e+1)));
+    playing=true;$("play").textContent="Pause";
+    st.className="status ok"; st.textContent=`Running. Seed ${state.seed} reproduces this swarm.`;
+  }catch(err){st.className="status err"; st.textContent="Agent unavailable ("+err.message+"). Manual controls still work.";}
+}
+$("genBtn").addEventListener("click",()=>{const t=$("prompt").value.trim();if(!t){$("statusMsg").className="status err";$("statusMsg").textContent="Describe the swarm first.";return;}runAgent(t);});
+$("examples").addEventListener("click",e=>{if(e.target.classList.contains("chip")){$("prompt").value=e.target.textContent;runAgent(e.target.textContent);}});
+
+/* ---------- export ---------- */
+function download(name,blob){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+async function copy(text,btn){try{await navigator.clipboard.writeText(text);const o=btn.textContent;btn.textContent="Copied";setTimeout(()=>btn.textContent=o,1100);}catch{}}
+$("dlSvg").addEventListener("click",()=>download(`beam-swarm-${state.preset}-seed${state.seed}-f${stepN}.svg`,new Blob([buildSVG()],{type:"image/svg+xml"})));
+$("copySvg").addEventListener("click",e=>copy(buildSVG(),e.target));
+$("copyCfg").addEventListener("click",e=>copy(JSON.stringify({seed:state.seed,frame:stepN,...state},null,2),e.target));
+$("dlPng").addEventListener("click",()=>{cv.toBlob(b=>download(`beam-swarm-${state.preset}-seed${state.seed}-f${stepN}.png`,b),"image/png");});
+
+/* ---------- init ---------- */
+buildSwatches(); buildSprites(); syncUI(); initSwarm();
+frame();
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>00-D · The Bridge</title>
+<style>
+  :root{
+    --paper:#F2EEE3;
+    --page:#E7E2D6;
+    --ink:#16181C;
+    --ink-soft:#3A3C40;
+    --muted:#8C8B80;
+    --hair:#C2BFB2;
+    --blue:#2C30E6;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Helvetica Neue",Helvetica,Inter,Arial,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans)}
+  .wrap{max-width:1500px;margin:0 auto;padding:22px 22px 60px}
+  .bar{display:flex;gap:8px;align-items:center;margin:4px 0 16px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--muted)}
+  .bar .sp{flex:1}
+  button{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;background:transparent;color:var(--ink);border:1px solid var(--ink);padding:7px 12px;cursor:pointer;transition:.15s}
+  button:hover{background:var(--ink);color:var(--paper)}
+  .sheet{background:var(--paper);box-shadow:0 1px 0 rgba(0,0,0,.05),0 18px 50px -20px rgba(0,0,0,.35)}
+  svg{display:block;width:100%;height:auto}
+  text{font-family:var(--mono)}
+  .h1{font-family:var(--sans);font-weight:700;fill:var(--ink);letter-spacing:-0.01em}
+  .lbl{fill:var(--muted);letter-spacing:.14em}
+  .lbl-ink{fill:var(--ink);letter-spacing:.08em}
+  .val{fill:var(--ink);letter-spacing:.02em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <span>FIG. 09-D · ELEVATION · SEED 1883</span>
+    <span class="sp"></span>
+    <button id="svg">Download SVG</button>
+    <button id="png">Download PNG</button>
+  </div>
+
+  <div class="sheet">
+  <svg id="art" viewBox="0 0 1600 1040" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="1600" height="1040" fill="var(--paper)"/>
+
+    <!-- corner registration crosses -->
+    <g stroke="var(--muted)" stroke-width="1">
+      <path d="M30 74h14 M37 67v14"/><path d="M1570 74h-14 M1563 67v14"/>
+      <path d="M30 1002h14 M37 995v14"/><path d="M1570 1002h-14 M1563 995v14"/>
+    </g>
+
+    <!-- top sheet header -->
+    <rect x="55" y="30" width="42" height="34" fill="none" stroke="var(--ink)" stroke-width="1"/>
+    <text x="76" y="53" text-anchor="middle" font-size="15" class="lbl-ink">3c</text>
+    <text x="120" y="53" font-size="13" class="lbl">SHEET 00-D — THE BRIDGE · INDEPENDENT LAYER, ELEVATION</text>
+
+    <!-- ruler numbers -->
+    <g font-size="11" class="lbl" text-anchor="middle">
+      <text x="156" y="88">1</text><text x="340" y="88">2</text><text x="524" y="88">3</text><text x="708" y="88">4</text><text x="892" y="88">5</text><text x="1076" y="88">6</text><text x="1260" y="88">7</text><text x="1444" y="88">8</text>
+      <text x="156" y="998">1</text><text x="340" y="998">2</text><text x="524" y="998">3</text><text x="708" y="998">4</text><text x="892" y="998">5</text><text x="1076" y="998">6</text><text x="1260" y="998">7</text><text x="1444" y="998">8</text>
+    </g>
+    <g font-size="11" class="lbl" text-anchor="middle">
+      <text x="46" y="190">A</text><text x="46" y="366">B</text><text x="46" y="542">C</text><text x="46" y="718">D</text><text x="46" y="894">E</text>
+      <text x="1554" y="190">A</text><text x="1554" y="366">B</text><text x="1554" y="542">C</text><text x="1554" y="718">D</text><text x="1554" y="894">E</text>
+    </g>
+
+    <!-- drawing frame (double border) -->
+    <rect x="64" y="98" width="1472" height="880" fill="none" stroke="var(--ink)" stroke-width="1"/>
+    <rect x="70" y="104" width="1460" height="868" fill="none" stroke="var(--ink)" stroke-width="1.5"/>
+
+    <!-- head text -->
+    <text x="107" y="140" font-size="13" class="lbl-ink">FIG. 09-D — SPAN, ELEVATION</text>
+    <text x="1455" y="140" font-size="13" class="lbl-ink" text-anchor="end">yasp.ai</text>
+
+    <text x="110" y="208" font-size="34" class="h1">The independent layer</text>
+    <text x="110" y="246" font-size="34" class="h1">between models and silicon.</text>
+    <text x="112" y="288" font-size="13" class="lbl">VENDOR-NEUTRAL — MORE VALUABLE AS THE MARKET FRAGMENTS</text>
+
+    <!-- ================= BRIDGE ================= -->
+    <!-- ground / water line -->
+    <line x1="90" y1="637" x2="1500" y2="637" stroke="var(--ink-soft)" stroke-width="1"/>
+    <!-- left bank hatch -->
+    <g stroke="var(--hair)" stroke-width="0.75">
+      <line x1="112" y1="644" x2="103" y2="656"/><line x1="134" y1="644" x2="125" y2="656"/><line x1="156" y1="644" x2="147" y2="656"/><line x1="178" y1="644" x2="169" y2="656"/><line x1="200" y1="644" x2="191" y2="656"/><line x1="222" y1="644" x2="213" y2="656"/><line x1="244" y1="644" x2="235" y2="656"/><line x1="266" y1="644" x2="257" y2="656"/><line x1="288" y1="644" x2="279" y2="656"/><line x1="310" y1="644" x2="301" y2="656"/><line x1="332" y1="644" x2="323" y2="656"/><line x1="354" y1="644" x2="345" y2="656"/>
+    </g>
+    <!-- right bank hatch -->
+    <g stroke="var(--hair)" stroke-width="0.75">
+      <line x1="1216" y1="644" x2="1207" y2="656"/><line x1="1238" y1="644" x2="1229" y2="656"/><line x1="1260" y1="644" x2="1251" y2="656"/><line x1="1282" y1="644" x2="1273" y2="656"/><line x1="1304" y1="644" x2="1295" y2="656"/><line x1="1326" y1="644" x2="1317" y2="656"/><line x1="1348" y1="644" x2="1339" y2="656"/><line x1="1370" y1="644" x2="1361" y2="656"/><line x1="1392" y1="644" x2="1383" y2="656"/><line x1="1414" y1="644" x2="1405" y2="656"/><line x1="1436" y1="644" x2="1427" y2="656"/><line x1="1458" y1="644" x2="1449" y2="656"/><line x1="1480" y1="644" x2="1471" y2="656"/>
+    </g>
+
+    <!-- deck -->
+    <line x1="385" y1="637" x2="1190" y2="637" stroke="var(--ink)" stroke-width="1"/>
+
+    <!-- side-span backstays -->
+    <line x1="620" y1="365" x2="385" y2="637" stroke="var(--ink)" stroke-width="1"/>
+    <line x1="950" y1="365" x2="1190" y2="637" stroke="var(--ink)" stroke-width="1"/>
+    <!-- faint anchor plunge (banks) -->
+    <path d="M560 637 Q535 705 520 748" fill="none" stroke="var(--hair)" stroke-width="0.9"/>
+    <path d="M1150 637 Q1185 760 1205 858" fill="none" stroke="var(--hair)" stroke-width="0.9"/>
+
+    <!-- suspenders -->
+    <g stroke="var(--hair)" stroke-width="0.75">
+      <line x1="650" y1="393.4" x2="650" y2="637"/><line x1="680" y1="417.7" x2="680" y2="637"/><line x1="710" y1="436.0" x2="710" y2="637"/><line x1="740" y1="448.2" x2="740" y2="637"/><line x1="770" y1="454.2" x2="770" y2="637"/><line x1="800" y1="454.2" x2="800" y2="637"/><line x1="830" y1="448.2" x2="830" y2="637"/><line x1="860" y1="436.0" x2="860" y2="637"/><line x1="890" y1="417.7" x2="890" y2="637"/><line x1="920" y1="393.4" x2="920" y2="637"/>
+    </g>
+
+    <!-- main cable (catenary) -->
+    <path d="M620 365 Q785 547 950 365" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
+
+    <!-- towers -->
+    <g stroke="var(--ink)" stroke-width="1" fill="none">
+      <rect x="610" y="356" width="28" height="12"/>
+      <line x1="615" y1="366" x2="615" y2="700"/><line x1="633" y1="366" x2="633" y2="700"/>
+      <g stroke="var(--hair)" stroke-width="0.75">
+        <path d="M615 388 L633 445 M633 388 L615 445"/><path d="M615 445 L633 502 M633 445 L615 502"/><path d="M615 502 L633 559 M633 502 L615 559"/><path d="M615 559 L633 616 M633 559 L615 616"/>
+      </g>
+      <rect x="608" y="700" width="32" height="9" fill="var(--paper)"/>
+      <rect x="940" y="356" width="28" height="12"/>
+      <line x1="945" y1="366" x2="945" y2="700"/><line x1="963" y1="366" x2="963" y2="700"/>
+      <g stroke="var(--hair)" stroke-width="0.75">
+        <path d="M945 388 L963 445 M963 388 L945 445"/><path d="M945 445 L963 502 M963 445 L945 502"/><path d="M945 502 L963 559 M963 502 L945 559"/><path d="M945 559 L963 616 M963 559 L945 616"/>
+      </g>
+      <rect x="938" y="700" width="32" height="9" fill="var(--paper)"/>
+    </g>
+
+    <!-- deck flow markers -->
+    <g fill="var(--ink)">
+      <path d="M500 631 l8 5 l-8 5 z"/><path d="M712 631 l8 5 l-8 5 z"/><path d="M1015 631 l8 5 l-8 5 z"/>
+    </g>
+
+    <!-- MODELS -->
+    <text x="238" y="632" font-size="13" class="lbl-ink">MODELS →</text>
+    <g fill="none" stroke="var(--ink)" stroke-width="0.9">
+      <circle cx="150" cy="628" r="4"/><circle cx="172" cy="628" r="4"/><circle cx="194" cy="628" r="4"/>
+    </g>
+
+    <!-- midspan globe -->
+    <text x="785" y="540" text-anchor="middle" font-size="13" class="lbl-ink">YASP — MIDSPAN</text>
+    <g>
+      <circle cx="785" cy="592" r="30" fill="var(--paper)" stroke="var(--ink)" stroke-width="1"/>
+      <ellipse cx="785" cy="592" rx="15" ry="30" fill="none" stroke="var(--ink)" stroke-width="0.8"/>
+      <line x1="785" y1="562" x2="785" y2="622" stroke="var(--ink)" stroke-width="0.8"/>
+      <line x1="755" y1="592" x2="815" y2="592" stroke="var(--ink)" stroke-width="0.8"/>
+      <ellipse cx="785" cy="592" rx="30" ry="14" fill="none" stroke="var(--ink)" stroke-width="0.8"/>
+      <circle cx="785" cy="592" r="3.2" fill="var(--blue)"/>
+    </g>
+
+    <!-- silicon stack -->
+    <g stroke="var(--ink)" stroke-width="1" fill="none">
+      <rect x="1245" y="480" width="100" height="30" fill="var(--paper)"/><path d="M1245 480 l16 -10 h100 l-16 10"/><path d="M1345 480 l16 -10 v30 l-16 10"/>
+      <rect x="1245" y="524" width="100" height="30" fill="var(--paper)"/><path d="M1245 524 l16 -10 h100 l-16 10"/><path d="M1345 524 l16 -10 v30 l-16 10"/>
+      <rect x="1245" y="568" width="100" height="30" fill="var(--paper)"/><path d="M1245 568 l16 -10 h100 l-16 10"/><path d="M1345 568 l16 -10 v30 l-16 10"/>
+      <g stroke="var(--hair)" stroke-dasharray="3 4"><line x1="1295" y1="510" x2="1295" y2="524"/><line x1="1295" y1="554" x2="1295" y2="568"/></g>
+    </g>
+    <g font-size="11" class="lbl-ink"><text x="1258" y="500">GPU</text><text x="1258" y="544">NPU</text><text x="1258" y="588">ASIC</text></g>
+
+    <!-- notes -->
+    <rect x="110" y="752" width="452" height="116" fill="none" stroke="var(--ink)" stroke-width="1"/>
+    <g font-size="12" class="lbl-ink">
+      <text x="126" y="776">NOTES:</text>
+      <text x="126" y="800">1. LEFT BANK — MODELS · RIGHT BANK — SILICON</text>
+      <text x="126" y="821">2. ONE SPAN CROSSES THE GAP — VENDOR-NEUTRAL, NO TOLL</text>
+      <text x="126" y="842">3. THE MORE THE FAR BANK FRAGMENTS, THE MORE THE SPAN IS WORTH</text>
+      <text x="126" y="863">4. YASP HOLDS THE MIDDLE — AND CHARGES NO RENT</text>
+    </g>
+
+    <!-- dimension -->
+    <g stroke="var(--ink-soft)" stroke-width="1">
+      <line x1="607" y1="845" x2="1190" y2="845"/>
+      <line x1="607" y1="838" x2="607" y2="852"/><line x1="1190" y1="838" x2="1190" y2="852"/>
+    </g>
+    <text x="607" y="836" font-size="12" class="lbl-ink">ONE SPAN — ANY MODEL TO ANY SILICON · NO TOLL, NO LOCK-IN</text>
+
+    <!-- ================= TITLE BLOCK ================= -->
+    <g stroke="var(--ink)" stroke-width="1">
+      <line x1="70" y1="901" x2="1530" y2="901"/>
+      <line x1="349" y1="901" x2="349" y2="972"/><line x1="1080" y1="901" x2="1080" y2="972"/><line x1="1210" y1="901" x2="1210" y2="972"/><line x1="1292" y1="901" x2="1292" y2="972"/><line x1="1378" y1="901" x2="1378" y2="972"/><line x1="1448" y1="901" x2="1448" y2="972"/>
+    </g>
+
+    <text x="128" y="946" font-size="34" font-weight="700" font-family="var(--sans)" fill="var(--ink)" letter-spacing="-0.02em">yasp</text>
+    <text x="130" y="962" font-size="9" class="lbl">PLATFORMLESS AI INFRASTRUCTURE</text>
+
+    <text x="372" y="920" font-size="10" class="lbl">TITLE</text>
+    <text x="372" y="951" font-size="22" font-weight="700" font-family="var(--sans)" fill="var(--ink)" letter-spacing="-0.01em">THE BRIDGE — THE INDEPENDENT LAYER</text>
+
+    <text x="1145" y="920" font-size="10" class="lbl" text-anchor="middle">PROJECTION</text>
+    <text x="1145" y="950" font-size="13" class="val" text-anchor="middle">ELEVATION</text>
+    <text x="1251" y="920" font-size="10" class="lbl" text-anchor="middle">SEED</text>
+    <text x="1251" y="950" font-size="13" class="val" text-anchor="middle">1883</text>
+    <text x="1335" y="920" font-size="10" class="lbl" text-anchor="middle">DATE</text>
+    <text x="1335" y="950" font-size="13" class="val" text-anchor="middle">07 · 2026</text>
+    <text x="1413" y="920" font-size="10" class="lbl" text-anchor="middle">SHEET</text>
+    <text x="1413" y="950" font-size="13" class="val" text-anchor="middle">00-D</text>
+    <text x="1489" y="920" font-size="10" class="lbl" text-anchor="middle">REV</text>
+    <rect x="1482" y="936" width="14" height="14" fill="var(--blue)"/>
+  </svg>
+  </div>
+</div>
+
+<script>
+  function resolvedSVG(){
+    const src=document.getElementById('art'), clone=src.cloneNode(true), cs=getComputedStyle(document.documentElement);
+    const map={'--paper':'','--page':'','--ink':'','--ink-soft':'','--muted':'','--hair':'','--blue':''};
+    for(const k in map) map[k]=cs.getPropertyValue(k).trim();
+    let s=new XMLSerializer().serializeToString(clone);
+    for(const k in map) s=s.replaceAll('var('+k+')',map[k]);
+    return s;
+  }
+  function dl(n,b){const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);}
+  document.getElementById('svg').onclick=()=>dl('yasp-bridge-00d.svg',new Blob([resolvedSVG()],{type:'image/svg+xml'}));
+  document.getElementById('png').onclick=()=>{
+    const svg=resolvedSVG(),scale=2,img=new Image(),url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+    img.onload=()=>{const c=document.createElement('canvas');c.width=1600*scale;c.height=1040*scale;const x=c.getContext('2d');x.scale(scale,scale);x.drawImage(img,0,0,1600,1040);URL.revokeObjectURL(url);c.toBlob(b=>dl('yasp-bridge-00d.png',b),'image/png');};
+    img.src=url;
+  };
+</script>
+</body>
+</html>

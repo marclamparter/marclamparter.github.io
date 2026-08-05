@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beam Dataflow Generator</title>
+<style>
+  :root{
+    --carbon:#0A0B0D; --carbon-2:#121317; --carbon-3:#181A1F;
+    --line:rgba(240,232,216,.10); --line-2:rgba(240,232,216,.18);
+    --cream:#F0E8D8; --cream-dim:rgba(240,232,216,.55); --cream-faint:rgba(240,232,216,.35);
+    --sage:#9DB89E; --sage-dim:rgba(157,184,158,.35);
+    --radius:10px;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--carbon);color:var(--cream);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:18px 22px;border-bottom:1px solid var(--line)}
+  header h1{font-size:15px;font-weight:600;letter-spacing:.02em;margin:0}
+  header .tag{font-family:var(--mono);font-size:11px;color:var(--cream-faint);letter-spacing:.06em;text-transform:uppercase}
+  header .thesis{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--cream-dim)}
+  header .thesis b{color:var(--sage);font-weight:500}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:0;min-height:calc(100% - 61px)}
+  @media(max-width:900px){.layout{grid-template-columns:1fr}}
+
+  .stage{display:flex;flex-direction:column;padding:22px;gap:14px;background:radial-gradient(120% 90% at 50% -10%, rgba(157,184,158,.04), transparent 60%),var(--carbon);min-width:0}
+  .canvas-wrap{position:relative;flex:1;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--carbon);min-height:340px}
+  #stageSvg{display:block;width:100%;height:auto;max-height:72vh}
+  .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--cream-faint);letter-spacing:.08em;text-transform:uppercase;padding:0 2px}
+  .stage-bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--cream-dim)}
+  .stage-bar .k{color:var(--cream-faint);text-transform:uppercase;letter-spacing:.06em}
+  .stage-bar .v{color:var(--cream)}
+  .stage-bar .seed-v{color:var(--sage)}
+
+  .panel{border-left:1px solid var(--line);background:var(--carbon-2);padding:0 0 40px;overflow-y:auto;max-height:calc(100vh - 61px)}
+  @media(max-width:900px){.panel{border-left:none;border-top:1px solid var(--line);max-height:none}}
+  .section{padding:18px 20px;border-bottom:1px solid var(--line)}
+  .section > .h{display:flex;align-items:center;gap:8px;margin:0 0 14px;font-family:var(--mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--cream-dim)}
+  .section > .h .n{color:var(--sage);font-weight:500}
+  .hint{font-family:var(--mono);font-size:10px;color:var(--cream-faint);margin-top:9px;line-height:1.5}
+
+  label.field{display:block;margin:0 0 13px}
+  label.field:last-child{margin-bottom:0}
+  .field .lab{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:11px;color:var(--cream-dim);margin-bottom:6px}
+  .field .lab .val{color:var(--cream)}
+  .field .sub{font-family:var(--mono);font-size:9.5px;color:var(--cream-faint);letter-spacing:.02em}
+
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line-2);border-radius:2px;outline:none;margin:6px 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--cream);border:2px solid var(--carbon-2);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--cream);border:2px solid var(--carbon-2);cursor:pointer}
+
+  select,input[type=number]{width:100%;background:var(--carbon-3);color:var(--cream);border:1px solid var(--line-2);border-radius:7px;padding:8px 10px;font-family:var(--mono);font-size:12px;outline:none}
+  select:focus,input:focus{border-color:var(--sage-dim)}
+  input[type=color]{width:100%;height:34px;padding:2px;background:var(--carbon-3);border:1px solid var(--line-2);border-radius:7px;cursor:pointer}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .row2 .field{margin-bottom:0}
+  .checks{display:flex;gap:16px;flex-wrap:wrap;margin-top:2px}
+  .chk{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--cream-dim);cursor:pointer;user-select:none}
+  .chk input{width:14px;height:14px;accent-color:var(--sage)}
+
+  .swatches{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+  .sw{position:relative;aspect-ratio:1;border-radius:7px;cursor:pointer;border:1px solid var(--line-2);overflow:hidden;transition:transform .12s ease,border-color .12s ease}
+  .sw:hover{transform:translateY(-1px)}
+  .sw .glow{position:absolute;inset:0}
+  .sw.on{border-color:var(--cream)}
+  .sw:not(.on){opacity:.32;filter:saturate(.5)}
+  .sw .dot{position:absolute;right:4px;top:4px;width:7px;height:7px;border-radius:50%;background:var(--cream);opacity:0;transition:opacity .12s}
+  .sw.on .dot{opacity:1}
+
+  textarea#prompt{width:100%;min-height:64px;resize:vertical;background:var(--carbon-3);color:var(--cream);border:1px solid var(--line-2);border-radius:8px;padding:10px 11px;font-family:var(--sans);font-size:13px;line-height:1.45;outline:none}
+  textarea#prompt:focus{border-color:var(--sage-dim)}
+  .agent-row{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .lock{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--cream-dim);cursor:pointer;user-select:none;white-space:nowrap}
+  .lock input{width:14px;height:14px;accent-color:var(--sage)}
+  .status{font-family:var(--mono);font-size:11px;margin-top:9px;min-height:15px;color:var(--cream-faint)}
+  .status.err{color:#E28C8C}.status.ok{color:var(--sage)}
+  .examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{font-family:var(--mono);font-size:10.5px;color:var(--cream-dim);border:1px solid var(--line-2);border-radius:20px;padding:4px 10px;cursor:pointer;background:transparent;transition:border-color .12s,color .12s}
+  .chip:hover{border-color:var(--sage-dim);color:var(--cream)}
+
+  button{font-family:var(--mono);cursor:pointer}
+  .btn{border:1px solid var(--line-2);background:var(--carbon-3);color:var(--cream);border-radius:8px;padding:9px 12px;font-size:12px;letter-spacing:.02em;transition:border-color .12s,background .12s;white-space:nowrap}
+  .btn:hover{border-color:var(--sage-dim)}
+  .btn:active{background:var(--carbon)}
+  .btn.primary{background:var(--sage);color:var(--carbon);border-color:var(--sage);font-weight:600}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.full{width:100%}
+  .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+  .reproduce{font-family:var(--mono);font-size:11px;color:var(--cream-dim);background:var(--carbon-3);border:1px solid var(--line);border-radius:8px;padding:10px 11px;margin-top:12px;word-break:break-all;line-height:1.5}
+  .reproduce b{color:var(--sage);font-weight:500}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Beam Dataflow Generator</h1>
+  <span class="tag">yasp · purposeful optimization</span>
+  <span class="thesis">unoptimised <b>→</b> optimised · the <b>seed</b> makes it reproducible</span>
+</header>
+
+<div class="layout">
+  <div class="stage">
+    <div class="canvas-wrap">
+      <svg id="stageSvg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <div class="axis"><span id="axL">raw model</span><span id="axR">optimised for silicon</span></div>
+    <div class="stage-bar">
+      <span><span class="k">model</span> <span class="v" id="barModel">—</span></span>
+      <span><span class="k">seed</span> <span class="v seed-v" id="barSeed">—</span></span>
+      <span><span class="k">lanes</span> <span class="v" id="barLanes">—</span></span>
+      <span><span class="k">beams</span> <span class="v" id="barTiles">—</span></span>
+    </div>
+  </div>
+
+  <div class="panel">
+
+    <!-- AGENT -->
+    <div class="section">
+      <div class="h"><span class="n">Agent</span> — describe the optimisation</div>
+      <textarea id="prompt" placeholder="e.g. eight noisy data streams compiled into clean packed lanes, cyan and emerald"></textarea>
+      <div class="agent-row">
+        <button class="btn primary full" id="genBtn">Generate dataflow</button>
+        <label class="lock" title="Keep the same seed so agent runs stay reproducible">
+          <input type="checkbox" id="seedLock" checked> lock seed
+        </label>
+      </div>
+      <div class="status" id="status"></div>
+      <div class="examples" id="examples">
+        <button class="chip">noisy streams optimised into clean lanes</button>
+        <button class="chip">many paths converging onto one core</button>
+        <button class="chip">fragmented schedule compacted, amber</button>
+        <button class="chip">wide pipeline, six passes, high glow</button>
+      </div>
+    </div>
+
+    <!-- OPTIMISATION -->
+    <div class="section">
+      <div class="h"><span class="n">Optimisation</span> — the story</div>
+
+      <label class="field">
+        <span class="lab">Model</span>
+        <select id="model">
+          <option value="pipeline" selected>Pipeline — streams across passes</option>
+          <option value="converge">Converge — route onto a core</option>
+          <option value="pack">Pack — compact the schedule</option>
+          <option value="fanout">Fanout — distribute across cores</option>
+          <option value="mesh">Mesh — systolic array</option>
+          <option value="reduce">Reduce — reduction tree</option>
+          <option value="route">Route — interconnect / access</option>
+          <option value="swirl">Swirl — spiral vortex</option>
+          <option value="radial">Radial — geometric symmetry</option>
+          <option value="neural">Neural — pruned network</option>
+          <option value="flow">Flow — coherent field</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="lab">Optimisation <span class="val" id="optVal">0.8</span></span>
+        <span class="sub">how completely disorder resolves to order (left → right)</span>
+        <input type="range" id="opt" min="0" max="1" step="0.01" value="0.8">
+      </label>
+
+      <label class="field">
+        <span class="lab">Entropy <span class="val" id="entropyVal">0.7</span></span>
+        <span class="sub">how messy the raw input is on the left</span>
+        <input type="range" id="entropy" min="0" max="1" step="0.01" value="0.7">
+      </label>
+
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Lanes <span class="val" id="lanesVal">9</span></span>
+          <input type="range" id="lanes" min="2" max="40" step="1" value="9">
+        </label>
+        <label class="field">
+          <span class="lab">Stages <span class="val" id="stagesVal">7</span></span>
+          <span class="sub">Pipeline</span>
+          <input type="range" id="stages" min="2" max="16" step="1" value="7">
+        </label>
+      </div>
+
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Density <span class="val" id="densityVal">0.55</span></span>
+          <span class="sub">Converge / Pack</span>
+          <input type="range" id="density" min="0" max="1" step="0.01" value="0.55">
+        </label>
+        <label class="field">
+          <span class="lab">Beam weight <span class="val" id="weightVal">0.55</span></span>
+          <input type="range" id="weight" min="0.15" max="1" step="0.01" value="0.55">
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="lab">Flow direction <span class="val" id="baseRotVal">0°</span></span>
+        <input type="range" id="baseRot" min="0" max="360" step="15" value="0">
+      </label>
+
+      <div class="checks">
+        <label class="chk"><input type="checkbox" id="guides" checked> stage guides</label>
+      </div>
+    </div>
+
+    <!-- PALETTE -->
+    <div class="section">
+      <div class="h"><span class="n">Palette</span> — one hue per stream</div>
+      <div class="swatches" id="swatches"></div>
+      <div class="hint">Each data lane keeps its own colour through the whole pipeline.</div>
+    </div>
+
+    <!-- RENDER -->
+    <div class="section">
+      <div class="h"><span class="n">Render</span></div>
+      <div class="row2">
+        <label class="field">
+          <span class="lab">Bloom <span class="val" id="bloomVal">7</span></span>
+          <input type="range" id="bloom" min="0" max="24" step="1" value="7">
+        </label>
+        <label class="field">
+          <span class="lab">Blend</span>
+          <select id="blend">
+            <option value="screen" selected>Screen</option>
+            <option value="lighten">Lighten</option>
+            <option value="plus-lighter">Plus (additive)</option>
+            <option value="normal">Normal</option>
+          </select>
+        </label>
+      </div>
+      <label class="field">
+        <span class="lab">Corner radius <span class="val" id="cornerVal">0.00</span></span>
+        <span class="sub">0 = sharp, like the source mark</span>
+        <input type="range" id="corner" min="0" max="1" step="0.05" value="0">
+      </label>
+      <label class="field">
+        <span class="lab">Background</span>
+        <input type="color" id="bg" value="#0A0B0D">
+      </label>
+    </div>
+
+    <!-- SEED -->
+    <div class="section">
+      <div class="h"><span class="n">Seed</span> — determinism</div>
+      <div class="btn-grid">
+        <input type="number" id="seed" value="512" min="0" step="1">
+        <button class="btn" id="randSeed">Randomize</button>
+      </div>
+      <div class="reproduce" id="reproduce"></div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="section">
+      <div class="h"><span class="n">Export</span></div>
+      <div class="btn-grid">
+        <button class="btn" id="copySvg">Copy SVG</button>
+        <button class="btn" id="dlSvg">Download SVG</button>
+        <button class="btn" id="dlPng">Download PNG</button>
+        <button class="btn" id="copyCfg">Copy recipe</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const PALETTE={
+  magenta:{base:"#B832D2",hi:"#F6D8FA"}, cyan:{base:"#32C5D2",hi:"#D8F7FA"},
+  emerald:{base:"#2ED2A0",hi:"#D8FAF0"}, amber:{base:"#D2A032",hi:"#FAF0D8"},
+  coral:{base:"#E24C4C",hi:"#FAD8D8"},   indigo:{base:"#6A32D2",hi:"#E2D8FA"},
+  lime:{base:"#A8D232",hi:"#F2FAD8"},
+};
+const PAL_KEYS=Object.keys(PALETTE);
+
+const state={
+  seed:512, model:"pipeline", opt:0.8, entropy:0.7, lanes:9, stages:7,
+  density:0.55, weight:0.55, baseRot:0, guides:true,
+  corner:0, bloom:7, blend:"screen", bg:"#0A0B0D",
+  colors:["cyan","emerald","indigo"],
+};
+
+const VIEW=800, MAX=1800;
+const lerp=(a,b,t)=>a+(b-a)*t, clamp=(v,l,h)=>Math.min(h,Math.max(l,v)), smooth=t=>t*t*(3-2*t);
+function hash2(ix,iy,seed){let h=(ix|0)*374761393+(iy|0)*668265263+(seed|0)*2147483647;h=(h^(h>>>13));h=Math.imul(h,1274126177);return((h^(h>>>16))>>>0)/4294967296;}
+function vnoise(x,y,seed){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;const a=hash2(ix,iy,seed),b=hash2(ix+1,iy,seed),c=hash2(ix,iy+1,seed),d=hash2(ix+1,iy+1,seed);const u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy);return lerp(lerp(a,b,u),lerp(c,d,u),v);}
+function fbm(x,y,seed,oct){let amp=.5,f=1,s=0,n=0;for(let i=0;i<oct;i++){s+=amp*vnoise(x*f,y*f,seed+i*1013);n+=amp;amp*=.5;f*=2;}return s/n;}
+
+function buildSVG(cfg){
+  const colors=cfg.colors.length?cfg.colors:["cyan"];
+  const L=Math.round(cfg.lanes);
+  const segs=[], guides=[];
+  // beam = glowing band: center, angle(rad), length, thickness, color, opacity
+  const beam=(cx,cy,ang,len,th,color,op)=>{ if(segs.length<MAX) segs.push({cx,cy,ang,len,th,color,op}); };
+
+  /* ---------- PIPELINE: streams optimised across passes ---------- */
+  if(cfg.model==="pipeline"){
+    const K=Math.round(cfg.stages);
+    const laneH=VIEW/L, stageW=VIEW/K;
+    for(let l=0;l<L;l++){
+      const color=colors[l%colors.length];
+      const cy0=(l+0.5)*laneH;
+      for(let s=0;s<K;s++){
+        const t=K>1?s/(K-1):1;                       // optimisation axis 0..1
+        const disorder=cfg.entropy*(1-t*cfg.opt);    // mess remaining here
+        const order=1-disorder;
+        const h1=hash2(l,s,cfg.seed), h2=hash2(l,s,cfg.seed+7), h3=hash2(l,s,cfg.seed+31);
+        const cx=(s+0.5)*stageW;
+        const jy=(h1-0.5)*disorder*laneH*1.25;
+        const ang=(h2-0.5)*disorder*0.9;
+        const len=lerp(stageW*0.30, stageW*0.94, order) * lerp(0.7,1,h3);
+        const th=laneH*cfg.weight*lerp(0.5,1,order);
+        const op=lerp(0.42,1,order);
+        beam(cx, cy0+jy, ang, len, th, color, op);
+      }
+    }
+    if(cfg.guides) for(let s=1;s<K;s++) guides.push(`<line x1="${(s*stageW).toFixed(1)}" y1="0" x2="${(s*stageW).toFixed(1)}" y2="${VIEW}"/>`);
+  }
+
+  /* ---------- CONVERGE: many paths routed onto a packed core ---------- */
+  else if(cfg.model==="converge"){
+    const N=Math.round(lerp(24,200,cfg.density));
+    const margin=VIEW*0.06;
+    const coreY=VIEW*0.5, bundle=VIEW*lerp(0.5,0.12,cfg.opt); // tighter with optimisation
+    const th=Math.max(2, (VIEW/N)*cfg.weight*2.2);
+    for(let i=0;i<N && segs.length<MAX;i++){
+      const color=colors[i%colors.length];
+      const h1=hash2(i,0,cfg.seed), h2=hash2(i,1,cfg.seed+7);
+      const startY=((i+0.5)/N)*VIEW + (h1-0.5)*cfg.entropy*(VIEW/N)*3;
+      const packedY=coreY + (i-(N-1)/2)*(bundle/N);
+      const endY=lerp(startY,packedY,cfg.opt);
+      const p1x=margin, p1y=clamp(startY,0,VIEW), p2x=VIEW-margin, p2y=clamp(endY,0,VIEW);
+      const cx=(p1x+p2x)/2, cy=(p1y+p2y)/2;
+      const dx=p2x-p1x, dy=p2y-p1y;
+      beam(cx,cy,Math.atan2(dy,dx),Math.hypot(dx,dy),th,color,lerp(0.5,0.95,hash2(i,2,cfg.seed)));
+    }
+    if(cfg.guides){ guides.push(`<line x1="${margin}" y1="0" x2="${margin}" y2="${VIEW}"/>`); guides.push(`<line x1="${VIEW-margin}" y1="0" x2="${VIEW-margin}" y2="${VIEW}"/>`); }
+  }
+
+  /* ---------- PACK: fragmented schedule compacted ---------- */
+  else if(cfg.model==="pack"){
+    const rows=L, slots=Math.round(lerp(6,40,cfg.density));
+    const rowH=VIEW/rows, slotW=VIEW/slots;
+    const th=rowH*cfg.weight;
+    const maxLen=Math.max(1,Math.round(lerp(1,5,cfg.entropy)));
+    for(let r=0;r<rows;r++){
+      const color=colors[r%colors.length];
+      const cy=(r+0.5)*rowH;
+      let x=0, gi=0;
+      while(x<slots && segs.length<MAX){
+        const h=hash2(r,gi,cfg.seed), hl=hash2(r,gi,cfg.seed+5), hg=hash2(r,gi,cfg.seed+9);
+        // fragmentation: gaps appear when optimisation is low
+        if(hg < (1-cfg.opt)*0.45){ x+=1; gi++; continue; }
+        const len=1+Math.floor(hl*maxLen);
+        const w=Math.min(len, slots-x);
+        const x1=x*slotW, x2=(x+w)*slotW;
+        beam((x1+x2)/2, cy, 0, (x2-x1)-slotW*0.12, th, color, lerp(0.6,1,cfg.opt));
+        x+=w; gi++;
+      }
+    }
+    if(cfg.guides) for(let r=1;r<rows;r++) guides.push(`<line x1="0" y1="${(r*rowH).toFixed(1)}" x2="${VIEW}" y2="${(r*rowH).toFixed(1)}"/>`);
+  }
+
+  /* ---------- FANOUT: one source distributed into balanced lanes ---------- */
+  else if(cfg.model==="fanout"){
+    const N=Math.round(lerp(6,48,cfg.density));
+    const margin=VIEW*0.06, srcX=margin, srcY=VIEW/2;
+    const th=Math.max(2,(VIEW/N)*cfg.weight*2.2);
+    for(let i=0;i<N && segs.length<MAX;i++){
+      const color=colors[i%colors.length];
+      const h=hash2(i,0,cfg.seed);
+      const evenY=((i+0.5)/N)*VIEW;
+      const scatterY=evenY+(h-0.5)*cfg.entropy*VIEW*0.8;
+      const destY=clamp(lerp(scatterY,evenY,cfg.opt),0,VIEW);
+      const p2x=VIEW-margin, dx=p2x-srcX, dy=destY-srcY;
+      beam((srcX+p2x)/2,(srcY+destY)/2,Math.atan2(dy,dx),Math.hypot(dx,dy),th,color,lerp(0.55,0.95,hash2(i,2,cfg.seed)));
+    }
+    if(cfg.guides){ guides.push(`<line x1="${srcX}" y1="0" x2="${srcX}" y2="${VIEW}"/>`); guides.push(`<line x1="${VIEW-margin}" y1="0" x2="${VIEW-margin}" y2="${VIEW}"/>`); }
+  }
+
+  /* ---------- MESH: systolic compute fabric tightening to a grid ---------- */
+  else if(cfg.model==="mesh"){
+    const rows=L, cols=Math.round(cfg.stages);
+    const cellW=VIEW/cols, cellH=VIEW/rows, o=cfg.opt;
+    const th=Math.min(cellW,cellH)*cfg.weight*0.5;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      if(segs.length>=MAX) break;
+      const h1=hash2(r,c,cfg.seed), h2=hash2(r,c,cfg.seed+7), h3=hash2(r,c,cfg.seed+13);
+      const cx=(c+0.5)*cellW+(h1-0.5)*(1-o)*cfg.entropy*cellW*0.9;
+      const cy=(r+0.5)*cellH+(h2-0.5)*(1-o)*cfg.entropy*cellH*0.9;
+      beam(cx,cy,0,cellW*lerp(0.55,0.98,o),th,colors[r%colors.length],lerp(0.5,1,o));      // data rows →
+      if(h3<lerp(0.35,1,cfg.density))
+        beam(cx,cy,Math.PI/2,cellH*lerp(0.55,0.98,o),th,colors[c%colors.length],lerp(0.45,0.95,o)); // weights ↓
+    }
+    if(cfg.guides){
+      for(let c=1;c<cols;c++) guides.push(`<line x1="${(c*cellW).toFixed(1)}" y1="0" x2="${(c*cellW).toFixed(1)}" y2="${VIEW}"/>`);
+      for(let r=1;r<rows;r++) guides.push(`<line x1="0" y1="${(r*cellH).toFixed(1)}" x2="${VIEW}" y2="${(r*cellH).toFixed(1)}"/>`);
+    }
+  }
+
+  /* ---------- REDUCE: hierarchical reduction tree (many → one) ---------- */
+  else if(cfg.model==="reduce"){
+    const N=Math.round(cfg.lanes);
+    const yBot=VIEW*0.92, yTop=VIEW*0.08, margin=VIEW*0.05;
+    const levels=Math.max(1,Math.ceil(Math.log2(Math.max(2,N))));
+    const th=Math.max(2,(VIEW/N)*cfg.weight*1.6);
+    let xs=[];
+    for(let i=0;i<N;i++){ const even=margin+((i+0.5)/N)*(VIEW-2*margin); xs.push(even+(hash2(i,0,cfg.seed)-0.5)*(1-cfg.opt)*cfg.entropy*(VIEW/N)); }
+    let level=0;
+    while(xs.length>1 && segs.length<MAX){
+      const y=lerp(yBot,yTop,level/levels), y2=lerp(yBot,yTop,(level+1)/levels);
+      const color=colors[level%colors.length], parents=[];
+      for(let k=0;k<xs.length;k+=2){
+        const a=xs[k], b=(k+1<xs.length)?xs[k+1]:xs[k], px=(a+b)/2;
+        for(const cxk of (k+1<xs.length?[a,b]:[a])){
+          const dx=px-cxk, dy=y2-y;
+          beam((cxk+px)/2,(y+y2)/2,Math.atan2(dy,dx),Math.hypot(dx,dy),th,color,lerp(0.55,0.95,cfg.opt));
+        }
+        parents.push(px);
+      }
+      xs=parents; level++;
+    }
+  }
+
+  /* ---------- ROUTE: tangled interconnect resolving to parallel ---------- */
+  else if(cfg.model==="route"){
+    const N=Math.round(cfg.lanes);
+    const margin=VIEW*0.06, leftX=margin, rightX=VIEW-margin;
+    const th=Math.max(2,(VIEW/N)*cfg.weight*1.7);
+    const perm=Array.from({length:N},(_,i)=>i).sort((a,b)=>hash2(a,0,cfg.seed)-hash2(b,0,cfg.seed));
+    for(let i=0;i<N && segs.length<MAX;i++){
+      const color=colors[i%colors.length];
+      const y1=((i+0.5)/N)*VIEW+(hash2(i,1,cfg.seed)-0.5)*cfg.entropy*(VIEW/N);
+      const yPerm=((perm[i]+0.5)/N)*VIEW;
+      const y2=lerp(yPerm,y1,cfg.opt);   // opt 0 = tangled, 1 = straight parallel
+      const dx=rightX-leftX, dy=y2-y1;
+      beam((leftX+rightX)/2,(y1+y2)/2,Math.atan2(dy,dx),Math.hypot(dx,dy),th,color,0.85);
+    }
+    if(cfg.guides){ guides.push(`<line x1="${leftX}" y1="0" x2="${leftX}" y2="${VIEW}"/>`); guides.push(`<line x1="${rightX}" y1="0" x2="${rightX}" y2="${VIEW}"/>`); }
+  }
+
+  /* ---------- SWIRL: tangential beams spiralling around a centre ---------- */
+  else if(cfg.model==="swirl"){
+    const cx=VIEW/2, cy=VIEW/2, maxR=VIEW*0.46;
+    const rings=clamp(Math.round(cfg.lanes),3,26);
+    const twist=cfg.baseRot*Math.PI/180+0.6;
+    for(let ri=0;ri<rings && segs.length<MAX;ri++){
+      const r=maxR*((ri+1)/rings);
+      const count=Math.max(4,Math.round(cfg.density*(6+ri*3)));
+      const th=(maxR/rings)*cfg.weight*0.9, seg=(2*Math.PI*r/count)*0.9;
+      for(let k=0;k<count && segs.length<MAX;k++){
+        const base=k*2*Math.PI/count + ri*0.35 + twist;
+        const ja=(hash2(ri,k,cfg.seed)-0.5)*(1-cfg.opt)*cfg.entropy*1.6;
+        const jr=(hash2(ri,k,cfg.seed+7)-0.5)*(1-cfg.opt)*cfg.entropy*(maxR/rings)*1.2;
+        const ang=base+ja, rr=r+jr;
+        beam(cx+Math.cos(ang)*rr, cy+Math.sin(ang)*rr, ang+Math.PI/2, seg, th, colors[ri%colors.length], lerp(0.5,0.95,cfg.opt));
+      }
+    }
+  }
+
+  /* ---------- RADIAL: n-fold geometric symmetry (spokes + rings) ---------- */
+  else if(cfg.model==="radial"){
+    const cx=VIEW/2, cy=VIEW/2, maxR=VIEW*0.46;
+    const n=clamp(Math.round(cfg.lanes),3,24), rings=clamp(Math.round(cfg.stages),1,10);
+    const rot=cfg.baseRot*Math.PI/180, th=(maxR/(rings*2))*cfg.weight;
+    for(let k=0;k<n && segs.length<MAX;k++){
+      const ang=rot + k*2*Math.PI/n + (hash2(k,0,cfg.seed)-0.5)*(1-cfg.opt)*cfg.entropy*0.5;
+      beam(cx+Math.cos(ang)*maxR/2, cy+Math.sin(ang)*maxR/2, ang, maxR, th, colors[k%colors.length], lerp(0.55,0.95,cfg.opt));
+    }
+    for(let ri=1;ri<=rings && segs.length<MAX;ri++){
+      const r=maxR*(ri/rings), color=colors[ri%colors.length];
+      const j=(hash2(ri,0,cfg.seed+3)-0.5)*(1-cfg.opt)*cfg.entropy*(maxR/rings)*0.6;
+      for(let k=0;k<n && segs.length<MAX;k++){
+        const a0=rot+k*2*Math.PI/n, a1=rot+(k+1)*2*Math.PI/n;
+        const x0=cx+Math.cos(a0)*(r+j), y0=cy+Math.sin(a0)*(r+j);
+        const x1=cx+Math.cos(a1)*(r+j), y1=cy+Math.sin(a1)*(r+j);
+        beam((x0+x1)/2,(y0+y1)/2,Math.atan2(y1-y0,x1-x0),Math.hypot(x1-x0,y1-y0),th,color,lerp(0.5,0.9,cfg.opt));
+      }
+    }
+  }
+
+  /* ---------- NEURAL: layered network, weak edges pruned as it optimises ---------- */
+  else if(cfg.model==="neural"){
+    const layers=clamp(Math.round(cfg.stages),2,10), margin=VIEW*0.08;
+    const baseN=clamp(Math.round(cfg.lanes),2,20);
+    const layerX=i=> margin + (i/(layers-1))*(VIEW-2*margin);
+    const nodeY=(ni,cnt)=> ((ni+0.5)/cnt)*VIEW;
+    const th=Math.max(1.5,(VIEW/baseN)*cfg.weight*1.0);
+    const prune=lerp(0.0,0.82,cfg.opt);
+    for(let li=0; li<layers-1 && segs.length<MAX; li++){
+      const c1=Math.max(2,Math.round(baseN*(1-0.05*li))), c2=Math.max(2,Math.round(baseN*(1-0.05*(li+1))));
+      const x1=layerX(li), x2=layerX(li+1);
+      for(let a=0;a<c1 && segs.length<MAX;a++) for(let b=0;b<c2 && segs.length<MAX;b++){
+        const wgt=hash2(li*97+a,b,cfg.seed);
+        if(wgt<prune) continue;
+        const y1=nodeY(a,c1)+(hash2(a,li,cfg.seed+5)-0.5)*cfg.entropy*(VIEW/c1)*0.6;
+        const y2=nodeY(b,c2)+(hash2(b,li+1,cfg.seed+9)-0.5)*cfg.entropy*(VIEW/c2)*0.6;
+        const op=lerp(0.22,0.95,(wgt-prune)/Math.max(0.001,1-prune));
+        beam((x1+x2)/2,(y1+y2)/2,Math.atan2(y2-y1,x2-x1),Math.hypot(x2-x1,y2-y1),th*lerp(0.6,1.1,wgt),colors[li%colors.length],op);
+      }
+    }
+  }
+
+  /* ---------- FLOW: beams following a coherent curl-noise field ---------- */
+  else if(cfg.model==="flow"){
+    const res=Math.round(lerp(6,26,cfg.density)), cell=VIEW/res;
+    const fs=lerp(1.2,5,(cfg.stages-2)/14), baseR=cfg.baseRot*Math.PI/180, th=cell*cfg.weight;
+    const pot=(nx,ny)=>fbm(nx*fs,ny*fs,cfg.seed,3);
+    const flowAngle=(x,y)=>{const nx=x/VIEW,ny=y/VIEW,e=0.0016;const dx=(pot(nx+e,ny)-pot(nx-e,ny))/(2*e);const dy=(pot(nx,ny+e)-pot(nx,ny-e))/(2*e);return Math.atan2(-dx,dy)+baseR;};
+    for(let r=0;r<res;r++) for(let c=0;c<res;c++){
+      if(segs.length>=MAX) break;
+      const x=(c+0.5)*cell, y=(r+0.5)*cell;
+      const ang=lerp((hash2(c,r,cfg.seed+3)-0.5)*Math.PI*2, flowAngle(x,y), cfg.opt);
+      const jit=(1-cfg.opt)*cfg.entropy;
+      const color=colors[clamp(Math.floor(fbm(x/VIEW*1.4+2,y/VIEW*1.4+7,cfg.seed+424242,2)*colors.length),0,colors.length-1)];
+      beam(x+(hash2(c,r,cfg.seed+1)-0.5)*jit*cell, y+(hash2(c,r,cfg.seed+2)-0.5)*jit*cell, ang, cell*lerp(0.7,1.5,cfg.opt), th, color, lerp(0.5,0.95,cfg.opt));
+    }
+  }
+
+  /* ---------- render ---------- */
+  function beamStr(s){
+    const deg=s.ang*180/Math.PI, rx=(cfg.corner*s.th*0.5).toFixed(1);
+    return `<g transform="translate(${s.cx.toFixed(1)} ${s.cy.toFixed(1)}) rotate(${deg.toFixed(2)})" opacity="${s.op.toFixed(3)}" style="mix-blend-mode:${cfg.blend}"><rect x="${(-s.len/2).toFixed(1)}" y="${(-s.th/2).toFixed(1)}" width="${s.len.toFixed(1)}" height="${s.th.toFixed(1)}" rx="${rx}" fill="url(#g-${s.color})"/></g>`;
+  }
+  const body=segs.map(beamStr).join("");
+  const guideG=guides.length?`<g stroke="rgba(240,232,216,0.07)" stroke-width="1" stroke-dasharray="2 5">${guides.join("")}</g>`:"";
+
+  const grads=colors.map(k=>{const{base,hi}=PALETTE[k];return `<linearGradient id="g-${k}" x1="0.5" y1="0" x2="0.5" y2="1"><stop stop-color="${base}" stop-opacity="0"/><stop offset="0.2" stop-color="${base}"/><stop offset="0.47" stop-color="${hi}"/><stop offset="0.5" stop-color="#ffffff"/><stop offset="0.53" stop-color="${hi}"/><stop offset="0.8" stop-color="${base}"/><stop offset="1" stop-color="${base}" stop-opacity="0"/></linearGradient>`;}).join("");
+  const bloom=cfg.bloom>0?`<filter id="bloom" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur in="SourceGraphic" stdDeviation="${cfg.bloom}" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`:"";
+  const bAttr=cfg.bloom>0?` filter="url(#bloom)"`:"";
+  const rot=cfg.baseRot?` transform="rotate(${cfg.baseRot} ${VIEW/2} ${VIEW/2})"`:"";
+
+  const svg=`<svg viewBox="0 0 ${VIEW} ${VIEW}" xmlns="http://www.w3.org/2000/svg"><defs>${grads}${bloom}</defs><rect width="${VIEW}" height="${VIEW}" fill="${cfg.bg}"/><g${rot}>${guideG}<g style="isolation:isolate"${bAttr}>${body}</g></g></svg>`;
+  return {svg,count:segs.length,lanes:L};
+}
+
+/* ---------- render + sync ---------- */
+const $=id=>document.getElementById(id);
+let lastSVG="";
+function render(){
+  const {svg,count,lanes}=buildSVG(state);
+  lastSVG=svg;
+  const doc=new DOMParser().parseFromString(svg,"image/svg+xml");
+  $("stageSvg").innerHTML=doc.documentElement.innerHTML;
+  $("barModel").textContent=state.model;
+  $("barSeed").textContent=state.seed;
+  $("barLanes").textContent=lanes;
+  $("barTiles").textContent=count;
+  const ax={pipeline:["raw model","optimised for silicon"],converge:["distributed paths","scheduled onto core"],pack:["fragmented","compacted"],fanout:["single source","balanced across cores"],mesh:["loose fabric","systolic array"],reduce:["parallel inputs","reduced result"],route:["tangled routing","parallel access"],swirl:["scattered","coherent swirl"],radial:["skewed","symmetric"],neural:["dense / unpruned","pruned network"],flow:["turbulent","coherent flow"]}[state.model];
+  $("axL").textContent=ax[0]; $("axR").textContent=ax[1];
+  $("reproduce").innerHTML=`<b>recipe</b> · ${state.model} · seed ${state.seed} · opt ${state.opt} · entropy ${state.entropy} · lanes ${state.lanes} · stages ${state.stages} · dens ${state.density} · wt ${state.weight} · corner ${state.corner} · dir ${state.baseRot}° · bloom ${state.bloom} · [${state.colors.join(", ")}]`;
+}
+
+/* ---------- swatches ---------- */
+function buildSwatches(){
+  const wrap=$("swatches"); wrap.innerHTML="";
+  PAL_KEYS.forEach(key=>{
+    const{base,hi}=PALETTE[key];
+    const el=document.createElement("div");
+    el.className="sw"+(state.colors.includes(key)?" on":""); el.title=key;
+    el.innerHTML=`<div class="glow" style="background:radial-gradient(60% 100% at 50% 50%, #fff, ${hi} 30%, ${base} 55%, ${base}00 100%)"></div><div class="dot"></div>`;
+    el.addEventListener("click",()=>{const i=state.colors.indexOf(key);if(i>=0){if(state.colors.length>1)state.colors.splice(i,1);}else state.colors.push(key);buildSwatches();render();});
+    wrap.appendChild(el);
+  });
+}
+
+/* ---------- controls ---------- */
+function bindRange(id,key,fmt){const el=$(id),out=$(id+"Val");const upd=()=>{const v=parseFloat(el.value);state[key]=v;if(out)out.textContent=fmt?fmt(v):v;};el.addEventListener("input",()=>{upd();render();});upd();}
+bindRange("opt","opt",v=>v.toFixed(2));
+bindRange("entropy","entropy",v=>v.toFixed(2));
+bindRange("lanes","lanes",v=>String(v));
+bindRange("stages","stages",v=>String(v));
+bindRange("density","density",v=>v.toFixed(2));
+bindRange("weight","weight",v=>v.toFixed(2));
+bindRange("baseRot","baseRot",v=>v+"°");
+bindRange("bloom","bloom",v=>String(v));
+bindRange("corner","corner",v=>v.toFixed(2));
+$("model").addEventListener("change",e=>{state.model=e.target.value;render();});
+$("blend").addEventListener("change",e=>{state.blend=e.target.value;render();});
+$("bg").addEventListener("input",e=>{state.bg=e.target.value;render();});
+$("guides").addEventListener("change",e=>{state.guides=e.target.checked;render();});
+$("seed").addEventListener("input",e=>{const v=parseInt(e.target.value,10);if(!Number.isNaN(v)){state.seed=v;render();}});
+$("randSeed").addEventListener("click",()=>{state.seed=Math.floor(Math.random()*1e6);$("seed").value=state.seed;render();});
+
+/* ---------- agent ---------- */
+const SCHEMA=`Return ONLY a JSON object (no prose, no markdown) with any of these keys:
+{
+ "model":"pipeline"|"converge"|"pack"|"fanout"|"mesh"|"reduce"|"route"|"swirl"|"radial"|"neural"|"flow",
+ "opt":0-1,        // optimisation: how fully the left-side disorder resolves into clean order on the right
+ "entropy":0-1,    // how messy the raw input is
+ "lanes":2-40,     // number of data streams / rows
+ "stages":2-16,    // pipeline passes
+ "density":0-1,    // converge: path count; pack: slot resolution
+ "weight":0.15-1,  // beam thickness relative to lane
+ "corner":0-1,     // edge rounding; 0 = sharp (default), matches the source mark
+ "baseRot":0-360,  // overall flow direction
+ "guides":bool,
+ "bloom":0-24, "blend":"screen"|"lighten"|"plus-lighter"|"normal",
+ "bg":"#RRGGBB",
+ "colors":[ subset of "magenta","cyan","emerald","amber","coral","indigo","lime" ]  // one hue per stream
+}
+Only include keys you intend to change.
+"pipeline/streams/passes/compile stages"->pipeline. "converge/route/onto a core/bundle/schedule onto"->converge.
+"pack/compact/fragmented->packed/memory layout"->pack.
+"fanout/distribute/broadcast/spread across cores/load balance"->fanout (density=count).
+"mesh/systolic/tensor array/compute fabric/grid of PEs"->mesh (lanes=rows, stages=cols, density=vertical wires).
+"reduce/reduction/tree/all-reduce/aggregate/many into one"->reduce (lanes=leaves).
+"route/interconnect/permutation/reorder/memory access/crossbar/untangle"->route (lanes=count).
+"swirl/spiral/vortex/rotating/cyclone"->swirl (lanes=rings, density=beams per ring, baseRot=twist).
+"geometric/radial/mandala/symmetry/spokes/kaleidoscope"->radial (lanes=symmetry order, stages=rings).
+"neural/network/graph/AI/layers/pruned/weights/connections/intelligent"->neural (stages=layers, lanes=nodes, opt=pruning).
+"flow/field/coherent/organic/emergent/current/streams following a field"->flow (density=resolution, stages=field scale, baseRot=direction).
+"noisy/messy input"->high entropy. "highly optimised/clean result"->opt near 1. "barely optimised/still messy"->opt low.
+"neon/glowing"->bloom up; "crisp"->bloom low. Colours: cyan=electric blue, emerald=green, indigo=violet, amber=gold, coral=red, lime=chartreuse, magenta=pink-purple.`;
+
+function applyConfig(o){
+  const num=(v,lo,hi)=>clamp(parseFloat(v),lo,hi);
+  const setR=(k,id,v,fmt)=>{state[k]=v;const el=$(id);if(el)el.value=v;const out=$(id+"Val");if(out)out.textContent=fmt?fmt(v):v;};
+  if(["pipeline","converge","pack","fanout","mesh","reduce","route","swirl","radial","neural","flow"].includes(o.model)){state.model=o.model;$("model").value=o.model;}
+  if(o.opt!=null)     setR("opt","opt",num(o.opt,0,1),v=>v.toFixed(2));
+  if(o.entropy!=null) setR("entropy","entropy",num(o.entropy,0,1),v=>v.toFixed(2));
+  if(o.lanes!=null)   setR("lanes","lanes",Math.round(num(o.lanes,2,40)));
+  if(o.stages!=null)  setR("stages","stages",Math.round(num(o.stages,2,16)));
+  if(o.density!=null) setR("density","density",num(o.density,0,1),v=>v.toFixed(2));
+  if(o.weight!=null)  setR("weight","weight",num(o.weight,0.15,1),v=>v.toFixed(2));
+  if(o.baseRot!=null) setR("baseRot","baseRot",Math.round(num(o.baseRot,0,360)),v=>v+"°");
+  if(o.bloom!=null)   setR("bloom","bloom",Math.round(num(o.bloom,0,24)));
+  if(o.corner!=null)  setR("corner","corner",num(o.corner,0,1),v=>v.toFixed(2));
+  if(typeof o.guides==="boolean"){state.guides=o.guides;$("guides").checked=o.guides;}
+  if(["screen","lighten","plus-lighter","normal"].includes(o.blend)){state.blend=o.blend;$("blend").value=o.blend;}
+  if(typeof o.bg==="string"&&/^#[0-9a-fA-F]{6}$/.test(o.bg)){state.bg=o.bg;$("bg").value=o.bg;}
+  if(Array.isArray(o.colors)){const v=o.colors.filter(c=>PAL_KEYS.includes(c));if(v.length){state.colors=[...new Set(v)];buildSwatches();}}
+}
+
+async function runAgent(text){
+  const status=$("status"),btn=$("genBtn");
+  status.className="status"; status.textContent="Agent is composing the dataflow…"; btn.disabled=true;
+  if(!$("seedLock").checked){state.seed=Math.floor(Math.random()*1e6);$("seed").value=state.seed;}
+  const msg=`Current config: ${JSON.stringify({model:state.model,opt:state.opt,entropy:state.entropy,lanes:state.lanes,stages:state.stages,density:state.density,weight:state.weight,baseRot:state.baseRot,guides:state.guides,bloom:state.bloom,blend:state.blend,bg:state.bg,colors:state.colors})}\n\nRequest: "${text}"\n\n${SCHEMA}`;
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1000,messages:[{role:"user",content:msg}]})});
+    if(!res.ok) throw new Error("API "+res.status);
+    const data=await res.json();
+    const raw=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+    const clean=raw.replace(/```json/gi,"").replace(/```/g,"").trim();
+    const s=clean.indexOf("{"),e=clean.lastIndexOf("}");
+    if(s<0||e<0) throw new Error("no JSON in reply");
+    applyConfig(JSON.parse(clean.slice(s,e+1)));
+    render();
+    status.className="status ok"; status.textContent=`Applied. Seed ${state.seed} reproduces this exactly.`;
+  }catch(err){status.className="status err"; status.textContent="Agent unavailable ("+err.message+"). Manual controls still work.";}
+  finally{btn.disabled=false;}
+}
+$("genBtn").addEventListener("click",()=>{const t=$("prompt").value.trim();if(!t){$("status").className="status err";$("status").textContent="Describe the optimisation first.";return;}runAgent(t);});
+$("examples").addEventListener("click",e=>{if(e.target.classList.contains("chip")){$("prompt").value=e.target.textContent;runAgent(e.target.textContent);}});
+
+/* ---------- export ---------- */
+function download(name,blob){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+async function copy(text,btn){try{await navigator.clipboard.writeText(text);flash(btn,"Copied");}catch{flash(btn,"Copy failed");}}
+function flash(btn,msg){const old=btn.textContent;btn.textContent=msg;setTimeout(()=>btn.textContent=old,1100);}
+$("copySvg").addEventListener("click",e=>copy(lastSVG,e.target));
+$("dlSvg").addEventListener("click",()=>download(`beam-dataflow-${state.model}-seed${state.seed}.svg`,new Blob([lastSVG],{type:"image/svg+xml"})));
+$("copyCfg").addEventListener("click",e=>copy(JSON.stringify({seed:state.seed,...state},null,2),e.target));
+$("dlPng").addEventListener("click",()=>{
+  const scale=2,px=VIEW*scale,img=new Image();
+  img.onload=()=>{const cv=document.createElement("canvas");cv.width=px;cv.height=px;cv.getContext("2d").drawImage(img,0,0,px,px);cv.toBlob(b=>download(`beam-dataflow-${state.model}-seed${state.seed}.png`,b),"image/png");};
+  img.onerror=()=>alert("PNG rasterization failed in this browser. Use Download SVG instead.");
+  img.src="data:image/svg+xml;base64,"+btoa(unescape(encodeURIComponent(lastSVG)));
+});
+
+buildSwatches();
+render();
+</script>
+</body>
+</html>

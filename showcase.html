@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Try it live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --mono: 'IBM Plex Mono', 'Menlo', monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+    --fg: #1a1a1a;
+    --fg-2: #555;
+    --fg-3: #999;
+    --border: #e2e2e2;
+    --border-light: #f0f0f0;
+    --bg: #fff;
+    --bg-subtle: #fafafa;
+    --bg-muted: #f5f5f5;
+    --accent: #1a1a1a;
+    --green: #22863a;
+    --green-bg: #f0fdf4;
+    --red: #cf222e;
+    --blue: #0969da;
+    --terminal-bg: #161b22;
+    --terminal-fg: #c9d1d9;
+    --terminal-dim: #8b949e;
+    --terminal-border: #30363d;
+    --terminal-green: #3fb950;
+    --terminal-blue: #58a6ff;
+    --terminal-yellow: #d29922;
+  }
+
+  html, body {
+    background: var(--bg);
+    font-family: var(--sans);
+    color: var(--fg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── LAYOUT ── */
+  .container {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ── INSTRUCTION ── */
+  .hint {
+    font-size: 13px;
+    color: var(--fg-3);
+    margin-bottom: 20px;
+  }
+  .hint strong {
+    color: var(--fg-2);
+    font-weight: 500;
+  }
+
+  /* ── CONFIG PANEL ── */
+  .config {
+    padding: 0 0 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+  }
+  .config-field label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .config-options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .config-opt {
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg-2);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s, color 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .config-opt:hover {
+    background: var(--bg-muted);
+    color: var(--fg);
+  }
+  .config-opt.active {
+    background: var(--bg-muted);
+    color: var(--fg);
+    font-weight: 500;
+  }
+  .config-opt .radio {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+  }
+  .config-opt.active .radio {
+    border-color: var(--fg);
+  }
+  .config-opt.active .radio::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--fg);
+  }
+
+  /* ── TERMINAL ── */
+  .terminal-section {
+    padding: 24px 0;
+  }
+  .terminal {
+    background: var(--terminal-bg);
+    border: 1px solid var(--terminal-border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--terminal-border);
+  }
+  .terminal-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--terminal-border);
+  }
+  .terminal-title {
+    font-size: 11px;
+    color: var(--terminal-dim);
+    margin-left: 6px;
+  }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 5px;
+    border: 1px solid var(--terminal-border);
+    background: rgba(255,255,255,0.06);
+    color: var(--terminal-fg);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .run-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.1);
+    border-color: #555;
+  }
+  .run-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .run-btn .key-hint {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    color: var(--terminal-dim);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .terminal-body {
+    padding: 16px 20px;
+    min-height: 180px;
+    overflow-x: auto;
+  }
+
+  .t-line {
+    color: var(--terminal-fg);
+    white-space: pre;
+    min-height: 22px;
+  }
+  .t-dim { color: var(--terminal-dim); }
+  .t-green { color: var(--terminal-green); }
+  .t-blue { color: var(--terminal-blue); }
+  .t-yellow { color: var(--terminal-yellow); }
+  .t-bold { font-weight: 600; }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 7px;
+    height: 15px;
+    background: var(--terminal-fg);
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+    opacity: 0.7;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .step-line {
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .step-line.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── RESULTS TABLE ── */
+  .results-panel {
+    margin-top: 0;
+    border-top: 1px solid var(--terminal-border);
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.015);
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.4s ease, max-height 0.5s ease, padding 0.4s ease;
+  }
+  .results-panel.visible {
+    opacity: 1;
+    max-height: 400px;
+    padding: 16px 20px;
+  }
+
+  .results-header {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--terminal-green);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .results-header .check {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(63, 185, 80, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+  }
+
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .results-table td {
+    padding: 6px 0;
+    font-size: 13px;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table .rl {
+    color: var(--terminal-dim);
+    width: 140px;
+    padding-right: 16px;
+  }
+  .results-table .rv {
+    color: var(--terminal-fg);
+    font-weight: 500;
+  }
+  .results-table .rv-accent {
+    color: #fff;
+    font-weight: 600;
+  }
+  .results-table .rv-sub {
+    color: var(--terminal-dim);
+    font-weight: 400;
+    font-size: 12px;
+    margin-left: 6px;
+  }
+
+  @media (max-width: 640px) {
+    .config-grid { grid-template-columns: 1fr; }
+    .container { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <p class="hint"><strong>Pick a model and a target,</strong> then hit Run. yasp compiles and validates on real silicon.</p>
+
+  <section class="config">
+    <div class="config-grid">
+      <div class="config-field">
+        <label>Model</label>
+        <div class="config-options" id="modelOpts">
+          <button class="config-opt active" data-v="llama-3-1-405b"><span class="radio"></span>Llama 3.1 405B</button>
+          <button class="config-opt" data-v="deepseek-v3-671b"><span class="radio"></span>DeepSeek-V3 671B</button>
+          <button class="config-opt" data-v="mixtral-8x22b"><span class="radio"></span>Mixtral 8x22B</button>
+        </div>
+      </div>
+      <div class="config-field">
+        <label>Target Hardware</label>
+        <div class="config-options" id="hwOpts">
+          <button class="config-opt active" data-v="nvidia-b200"><span class="radio"></span>Nvidia B200</button>
+          <button class="config-opt" data-v="amd-mi300x"><span class="radio"></span>AMD MI300X</button>
+          <button class="config-opt" data-v="aws-trainium"><span class="radio"></span>AWS Trainium</button>
+        </div>
+      </div>
+      <div class="config-field">
+        <label>Mode</label>
+        <div class="config-options" id="modeOpts">
+          <button class="config-opt active" data-v="inference"><span class="radio"></span>Inference</button>
+          <button class="config-opt" data-v="training"><span class="radio"></span>Training</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="terminal-section">
+    <div class="terminal" id="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-bar-left">
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <span class="terminal-title">yasp compile</span>
+        </div>
+        <button class="run-btn" id="runBtn">
+          Run
+          <span class="key-hint">&crarr;</span>
+        </button>
+      </div>
+      <div class="terminal-body" id="termBody"></div>
+      <div class="results-panel" id="resultsPanel"></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const MODEL_UNIT = {
+  'llama-3-1-405b': 'tok/s',
+  'deepseek-v3-671b': 'tok/s',
+  'mixtral-8x22b': 'tok/s',
+};
+
+const DATA = {
+  'llama-3-1-405b': {
+    'nvidia-b200':  { speedup: 8.4, latency: 12.5, base: 105.0, throughput: '480',   baseThroughput: '57',  correctness: 'pass' },
+    'amd-mi300x':   { speedup: 6.2, latency: 19.0, base: 117.8, throughput: '320',   baseThroughput: '51',  correctness: 'pass' },
+    'aws-trainium': { speedup: 7.0, latency: 18.4, base: 128.8, throughput: '290',   baseThroughput: '41',  correctness: 'pass' },
+  },
+  'deepseek-v3-671b': {
+    'nvidia-b200':  { speedup: 7.8, latency: 8.2,  base: 64.0,  throughput: '940',   baseThroughput: '120', correctness: 'pass' },
+    'amd-mi300x':   { speedup: 5.8, latency: 14.5, base: 84.1,  throughput: '620',   baseThroughput: '107', correctness: 'pass' },
+    'aws-trainium': { speedup: 6.4, latency: 11.0, base: 70.4,  throughput: '750',   baseThroughput: '117', correctness: 'pass' },
+  },
+  'mixtral-8x22b': {
+    'nvidia-b200':  { speedup: 9.1, latency: 4.8,  base: 43.7,  throughput: '2,140', baseThroughput: '235', correctness: 'pass' },
+    'amd-mi300x':   { speedup: 6.5, latency: 9.2,  base: 59.8,  throughput: '1,380', baseThroughput: '212', correctness: 'pass' },
+    'aws-trainium': { speedup: 7.3, latency: 8.1,  base: 59.1,  throughput: '1,510', baseThroughput: '207', correctness: 'pass' },
+  }
+};
+
+const STEPS = [
+  { text: 'Parsing model graph',         ms: 400 },
+  { text: 'Profiling target hardware',   ms: 600 },
+  { text: 'Generating optimized kernels', ms: 800 },
+  { text: 'Validating on real silicon',   ms: 700 },
+  { text: 'Packaging binary',            ms: 300 },
+];
+
+let model = 'llama-3-1-405b';
+let hw = 'nvidia-b200';
+let mode = 'inference';
+let running = false;
+
+const termBody = document.getElementById('termBody');
+const resultsPanel = document.getElementById('resultsPanel');
+const runBtn = document.getElementById('runBtn');
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+// ── SELECTORS ──
+function setupOpts(id, cb) {
+  const el = document.getElementById(id);
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.config-opt');
+    if (!btn || running) return;
+    el.querySelectorAll('.config-opt').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    cb(btn.dataset.v);
+    renderIdle();
+  });
+}
+setupOpts('modelOpts', v => { model = v; });
+setupOpts('hwOpts', v => { hw = v; });
+setupOpts('modeOpts', v => { mode = v; });
+
+// ── IDLE STATE ──
+function renderIdle() {
+  resultsPanel.classList.remove('visible');
+  resultsPanel.innerHTML = '';
+
+  termBody.innerHTML = '';
+  const lines = [
+    `<span class="t-dim">$</span> yasp compile \\`,
+    `    --model <span class="t-blue">${model}</span> \\`,
+    `    --target <span class="t-blue">${hw}</span> \\`,
+    `    --mode <span class="t-blue">${mode}</span>`,
+  ];
+  lines.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 't-line';
+    div.innerHTML = l;
+    termBody.appendChild(div);
+  });
+
+  const cursorLine = document.createElement('div');
+  cursorLine.className = 't-line';
+  cursorLine.innerHTML = '<span class="t-dim">$</span> <span class="cursor-blink"></span>';
+  termBody.appendChild(cursorLine);
+}
+
+// ── ANIMATE NUMBER ──
+function animateNum(el, from, to, duration, dec, suffix) {
+  const start = performance.now();
+  const diff = to - from;
+  function tick(now) {
+    const p = Math.min((now - start) / duration, 1);
+    el.textContent = (from + diff * easeOut(p)).toFixed(dec) + suffix;
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── RUN ──
+async function run() {
+  if (running) return;
+  running = true;
+  runBtn.disabled = true;
+  runBtn.innerHTML = '<span style="opacity:0.5">Running...</span>';
+  resultsPanel.classList.remove('visible');
+  resultsPanel.innerHTML = '';
+
+  const d = DATA[model][hw];
+  const unit = MODEL_UNIT[model];
+
+  // Command (dimmed)
+  termBody.innerHTML = '';
+  const cmd = [
+    `<span class="t-dim">$</span> <span class="t-dim">yasp compile --model ${model} --target ${hw} --mode ${mode}</span>`,
+  ];
+  cmd.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 't-line';
+    div.innerHTML = l;
+    termBody.appendChild(div);
+  });
+
+  // Blank line
+  const blank = document.createElement('div');
+  blank.className = 't-line';
+  blank.innerHTML = '&nbsp;';
+  termBody.appendChild(blank);
+
+  // Steps
+  for (let i = 0; i < STEPS.length; i++) {
+    const s = STEPS[i];
+    const div = document.createElement('div');
+    div.className = 't-line step-line';
+
+    // Show as running
+    div.innerHTML = `<span class="t-yellow">\u25cb</span> <span class="t-dim">${s.text}...</span>`;
+    termBody.appendChild(div);
+    await sleep(30);
+    div.classList.add('show');
+    await sleep(s.ms);
+
+    // Mark done
+    div.innerHTML = `<span class="t-green">\u2713</span> ${s.text}`;
+  }
+
+  await sleep(200);
+
+  // Done line
+  const done = document.createElement('div');
+  done.className = 't-line step-line';
+  done.innerHTML = `<br><span class="t-green t-bold">Compilation complete.</span>`;
+  termBody.appendChild(done);
+  await sleep(30);
+  done.classList.add('show');
+  await sleep(300);
+
+  // ── RESULTS ──
+  resultsPanel.innerHTML = `
+    <div class="results-header">
+      <span class="check">\u2713</span>
+      ${model} on ${hw}
+    </div>
+    <table class="results-table">
+      <tr>
+        <td class="rl">Speedup</td>
+        <td class="rv rv-accent" id="rSpeedup">1.0\u00d7</td>
+      </tr>
+      <tr>
+        <td class="rl">Latency</td>
+        <td class="rv"><span id="rLatency">${d.base.toFixed(1)}</span>ms <span class="rv-sub">was ${d.base}ms</span></td>
+      </tr>
+      <tr>
+        <td class="rl">Throughput</td>
+        <td class="rv">${d.throughput} ${unit} <span class="rv-sub">was ${d.baseThroughput} ${unit}</span></td>
+      </tr>
+      <tr>
+        <td class="rl">Correctness</td>
+        <td class="rv"><span class="t-green">${d.correctness}</span> <span class="rv-sub">validated on real silicon</span></td>
+      </tr>
+    </table>
+  `;
+
+  resultsPanel.classList.add('visible');
+
+  await sleep(100);
+  animateNum(document.getElementById('rSpeedup'), 1.0, d.speedup, 900, 1, '\u00d7');
+  animateNum(document.getElementById('rLatency'), d.base, d.latency, 900, 1, '');
+
+  running = false;
+  runBtn.disabled = false;
+  runBtn.innerHTML = 'Run <span class="key-hint">&crarr;</span>';
+}
+
+runBtn.addEventListener('click', run);
+
+// Keyboard shortcut: Enter to run
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !running) run();
+});
+
+// ── INIT ──
+renderIdle();
+</script>
+</body>
+</html>
+

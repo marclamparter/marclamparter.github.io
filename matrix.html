@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagram Cover Generator</title>
+<style>
+:root{--bg:#0B0C0E;--edge:#C9C9C2;--mesh:#E6E6DF;--dot:#DEDED6;--muted:#7C7B72;--line:#2A2C31;--txt:#CFCEC6;--accent:#2C30E6;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:var(--mono)}
+.app{min-height:100%;display:flex;flex-direction:column}
+.toolbar{display:flex;gap:11px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12px;letter-spacing:.05em}
+.brand{font-weight:600}.brand small{color:var(--muted);font-weight:400;letter-spacing:.14em;margin-left:8px}
+.sp{flex:1}label{display:inline-flex;gap:6px;align-items:center;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;font-size:10.5px}
+input[type=number]{width:66px}input[type=number],select{background:#0c0d10;border:1px solid var(--line);color:var(--txt);font-family:var(--mono);font-size:12px;padding:6px 7px}
+input[type=range]{accent-color:var(--accent);width:80px}input[type=checkbox]{accent-color:var(--accent)}
+button{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;background:transparent;color:var(--txt);border:1px solid var(--line);padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--txt)}button.pri{border-color:var(--accent);color:#c9caff}button.pri:hover{background:var(--accent);color:#fff}
+.stage{flex:1;display:flex;align-items:center;justify-content:center;padding:20px}
+.stage svg{display:block;width:auto;height:auto;max-width:94vw;max-height:86vh;cursor:pointer}
+.hint{font-size:10px;color:var(--muted);padding:0 16px 10px;letter-spacing:.05em}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:9px 16px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10}
+</style></head><body>
+<div class="app">
+<div class="toolbar">
+<span class="brand">yasp<small>DIAGRAM COVER GENERATOR</small></span><span class="sp"></span>
+<label>Diagram <select id="scene">
+<option value="platformless">Platformless</option>
+<option value="fragmentation">The Problem</option>
+<option value="kronos">Kronos</option>
+<option value="gaia">Gaia</option>
+<option value="together">Kronos + Gaia</option>
+<option value="pipeline">Pipeline (end-to-end)</option>
+<option value="proof">Proven on Silicon</option>
+<option value="matrix">The Gap · The Matrix</option>
+<option value="months">Benefit · Months → Hours</option>
+<option value="cost">Benefit · Cut Costs</option>
+<option value="nolockin">Benefit · No Lock-In</option>
+<option value="freeeng">Benefit · Free Your Engineers</option>
+<option value="auditable">Benefit · Auditable & Deterministic</option>
+</select></label>
+<label>Version <select id="variant"><option value="A">A · Exploded</option><option value="B">B · Slab</option><option value="C">C · Isometric</option></select></label>
+<label>Seed <input id="seed" type="number" value="7"></label><button id="rnd">↻</button>
+<label>Accent <select id="accent"><option value="#2C30E6">Yasp Blue</option><option value="#93A487">Sage</option><option value="#C98A4B">Copper</option><option value="#F0E8D8">Cream</option></select></label>
+<label>Models <input id="m" type="range" min="3" max="9" value="6"></label>
+<label>Targets <input id="nn" type="range" min="3" max="8" value="5"></label>
+<label>Rotate <input id="az" type="range" min="-20" max="75" value="28"></label>
+<label>Tilt <input id="el" type="range" min="6" max="48" value="16"></label>
+<label>Line <input id="lw" type="range" min="0.4" max="2.6" step="0.1" value="1"></label>
+<label>Text <input id="ts" type="range" min="0.6" max="2" step="0.1" value="1"></label>
+<label><input id="labels" type="checkbox" checked> Labels</label>
+<button id="svg">SVG</button><button id="png" class="pri">PNG</button>
+</div>
+<div class="stage" id="stage"></div>
+<div class="hint">Click the image to open the copy panel, then press Cmd/Ctrl-C. Rotate/Tilt reset to each diagram's default when you switch. Open the saved file in a browser tab if a sandbox blocks downloads.</div></div>
+<script>
+// yasp — MULTI-DIAGRAM COVER GENERATOR. Shared branded toolkit; each scene = a unique structure.
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
+function hsl2hex(h,sa,l){sa/=100;l/=100;h=((h%360)+360)%360;const a=sa*Math.min(l,1-l);const k=n=>(n+h/30)%12;const fch=n=>{const c=l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return Math.round(255*c);};return '#'+((1<<24)+(fch(0)<<16)+(fch(8)<<8)+fch(4)).toString(16).slice(1);}
+const V={add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],mul:(a,s)=>[a[0]*s,a[1]*s,a[2]*s],lerp:(a,b,t)=>[lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]};
+
+const SCENE_LIST=['platformless','fragmentation','kronos','gaia','together','pipeline','proof','matrix','months','cost','nolockin','freeeng','auditable'];
+const SCENE_NAME={platformless:'PLATFORMLESS',fragmentation:'THE PROBLEM',kronos:'KRONOS',gaia:'GAIA',together:'KRONOS + GAIA',pipeline:'THE PIPELINE',proof:'PROVEN ON SILICON',matrix:'THE GAP · THE MATRIX',months:'MONTHS → HOURS',cost:'CUT COSTS',nolockin:'NO LOCK-IN',freeeng:'FREE YOUR ENGINEERS',auditable:'AUDITABLE · DETERMINISTIC'};
+
+function build(opts){
+  opts=opts||{};
+  const scene=opts.scene||'platformless';
+  const variant=opts.variant||'A';
+  const seed=opts.seed||7, rand=mulberry32(seed);
+  const accent=opts.accent||'#2C30E6', labels=opts.labels!==false;
+  const lw=opts.lineWeight==null?1:opts.lineWeight, ts=opts.textScale==null?1:opts.textScale;
+
+  const CAN={matrix:[1440,1120],fragmentation:[1200,1400],platformless:[1480,1040],kronos:[1160,1460],gaia:[1320,1200],together:[1480,1100],proof:[1420,1120],pipeline:[1180,1440],months:[1460,1040],cost:[1460,1060],nolockin:[1200,1380],freeeng:[1480,1080],auditable:[1500,1080]};
+  let [LW,Ht]=CAN[scene]||[1320,1180];
+  if(scene==='kronos'&&variant==='B'){LW=1520;Ht=1080;}
+  if(scene==='gaia'&&variant==='B'){LW=1520;Ht=1060;}
+  if(scene==='together'&&variant==='B'){LW=1520;Ht=1040;}
+  if(scene==='proof'&&variant==='B'){LW=1520;Ht=1020;}
+  if(scene==='fragmentation'&&variant==='B'){LW=1520;Ht=1080;}
+  if(scene==='pipeline'&&(variant==='B'||variant==='C')){LW=1560;Ht=1020;}
+  if(['months','cost','nolockin','freeeng','auditable'].includes(scene)&&variant==='B'){LW=1560;Ht=1000;}
+  if(variant==='C'){LW=1520;Ht=1010;}
+  const CAM={gaia:{az:26,el:36,dist:3.0},kronos:{az:26,el:14,dist:2.95},fragmentation:{az:24,el:15,dist:3.0},proof:{az:28,el:20,dist:3.0},pipeline:{az:28,el:16,dist:2.95},default:{az:28,el:16,dist:2.95}};
+  const cam=CAM[scene]||CAM.default;
+  const az=(opts.az==null?cam.az:opts.az)*Math.PI/180, el=(opts.el==null?cam.el:opts.el)*Math.PI/180, dist=opts.dist||cam.dist;
+
+  const T=[0,0,0],UP=[0,0,1];
+  const E=[T[0]+dist*Math.sin(az)*Math.cos(el),T[1]-dist*Math.cos(az)*Math.cos(el),T[2]+dist*Math.sin(el)];
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],norm=a=>{const m=Math.hypot(...a);return[a[0]/m,a[1]/m,a[2]/m];};
+  const fwd=norm(sub(T,E)),right=norm(cross(fwd,UP)),up=cross(right,fwd);
+  const raw=p=>{const r=[p[0]-E[0],p[1]-E[1],p[2]-E[2]];const cz=dot(r,fwd);return[dot(r,right)/cz,dot(r,up)/cz,cz];};
+  let sc=1,cX=0,cY=0;
+  function fit(pts,mar){mar=mar||120;let mnX=1e9,mxX=-1e9,mnY=1e9,mxY=-1e9;for(const p of pts){const r=raw(p);mnX=Math.min(mnX,r[0]);mxX=Math.max(mxX,r[0]);mnY=Math.min(mnY,r[1]);mxY=Math.max(mxY,r[1]);}
+    sc=Math.min((LW-2*mar)/(mxX-mnX||1),(Ht-2*mar)/(mxY-mnY||1));cX=(mnX+mxX)/2;cY=(mnY+mxY)/2;}
+  const P=w=>{const r=raw(w);return[LW/2+(r[0]-cX)*sc,Ht/2-(r[1]-cY)*sc,r[2]];};
+  const f=n=>Math.round(n*10)/10;const parts=[];const push=x=>parts.push(x);
+  push(`<rect x="0" y="0" width="${LW}" height="${Ht}" fill="var(--bg)"/>`);
+
+  // ---------- shared branded primitives ----------
+  const LINE=(a,b,st,sw,op,dash)=>`<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="${st}" stroke-width="${f((sw||1)*lw)}" stroke-opacity="${op==null?1:op}"${dash?` stroke-dasharray="${dash}"`:''}/>`;
+  const seg=(wa,wb,st,sw,op,dash)=>push(LINE(P(wa),P(wb),st,sw,op,dash));
+  const route=(wa,wb,st,sw,op)=>{const a=P(wa),b=P(wb),mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;push(`<path d="M${f(a[0])},${f(a[1])} C${f(mx)},${f(a[1])} ${f(mx)},${f(b[1])} ${f(b[0])},${f(b[1])}" fill="none" stroke="${st}" stroke-width="${f((sw||1)*lw)}" stroke-opacity="${op==null?1:op}"/>`);};
+  function cloud(w,rad,nn){const c=P(w);let s='';for(let k=0;k<(nn||14);k++){const an=rand()*6.283,rr=(rad||18)*(0.2+rand()*0.85);s+=`<circle cx="${f(c[0]+Math.cos(an)*rr)}" cy="${f(c[1]+Math.sin(an)*rr*0.72)}" r="${rand()<0.3?1.7:1.1}" fill="var(--dot)" fill-opacity="${f(0.4+rand()*0.5)}"/>`;}push(s);push(`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="3" fill="none" stroke="var(--edge)" stroke-width="${f(lw)}" stroke-opacity="0.6"/>`);}
+  function die(w,cell,shift,verify){const c=P(w);const g=3;cell=cell||9;const ox=c[0]-g*cell/2,oy=c[1]-g*cell/2;let s=`<rect x="${f(ox-3)}" y="${f(oy-3)}" width="${f(g*cell+6)}" height="${f(g*cell+6)}" fill="none" stroke="#9aa0a6" stroke-width="${f(1.4*lw)}" stroke-opacity="0.9"/>`;
+    for(let a=0;a<g;a++)for(let b=0;b<g;b++){const gu=a/g,gv=b/g;s+=`<rect x="${f(ox+a*cell)}" y="${f(oy+b*cell)}" width="${f(cell-1.5)}" height="${f(cell-1.5)}" fill="${hsl2hex(58+(shift||0)+gu*80-gv*14,68,56+gu*8)}"/>`;}
+    if(verify){const r=g*cell/2+8;s+=`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="${f(r)}" fill="none" stroke="${accent}" stroke-width="${f(1.4*lw)}" stroke-opacity="0.8"/><path d="M${f(c[0]-5)},${f(c[1])} l4,4 l7,-9" fill="none" stroke="${accent}" stroke-width="${f(1.8*lw)}" stroke-linecap="round"/>`;}
+    push(s);}
+  function node(w,r,fill,op){const c=P(w);push(`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="${f(r)}" fill="${fill}" fill-opacity="${op==null?1:op}"/>`);}
+  function ring(w,r,st,op){const c=P(w);push(`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="${f(r)}" fill="none" stroke="${st}" stroke-width="${f(1.2*lw)}" stroke-opacity="${op==null?0.7:op}"/>`);}
+  function ribbon(A,B,spread,op,K){K=K||20;let poly=[P(V.sub(A,spread)),P(V.sub(B,spread)),P(V.add(B,spread)),P(V.add(A,spread))];
+    push(`<polygon points="${poly.map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="var(--mesh)" fill-opacity="0.05" stroke="var(--edge)" stroke-width="${f(1.2*lw)}" stroke-opacity="0.55"/>`);
+    let s='';for(let k=0;k<K;k++){const t=k/(K-1),p=V.lerp(A,B,t);s+=LINE(P(V.sub(p,spread)),P(V.add(p,spread)),hsl2hex(206+k*4,72,60),1.1,op==null?0.65:op);}push(s);}
+  function tx(w,dx,dy,t,size,fill){const p=P(w);return `<text x="${f(p[0]+dx)}" y="${f(p[1]+dy)}" font-family="var(--mono)" font-size="${f(size*ts)}" letter-spacing="0.12em" fill="${fill}">${t}</text>`;}
+  function caption(title,sub){if(!labels)return;push(`<text x="40" y="${Ht-46}" font-family="var(--mono)" font-size="${f(13*ts)}" letter-spacing="0.14em" fill="var(--edge)">${title}</text>`);if(sub)push(`<text x="40" y="${Ht-28}" font-family="var(--mono)" font-size="${f(9.5*ts)}" letter-spacing="0.14em" fill="var(--muted)">${sub}</text>`);}
+  function lbl(w,dx,dy,title,sub){if(!labels)return;push(tx(w,dx,dy,title,14,'var(--edge)'));if(sub)push(tx(w,dx,dy+14,sub,9.5,'var(--muted)'));}
+  // ---- cover-grade primitives (descent / ILS craft) ----
+  const QUAD=(A,B,C,D,col,op)=>`<polygon points="${f(A[0])},${f(A[1])} ${f(B[0])},${f(B[1])} ${f(C[0])},${f(C[1])} ${f(D[0])},${f(D[1])}" fill="${col}"${op!=null?` fill-opacity="${op}"`:''}/>`;
+  const hxsh=(base,m)=>'#'+base.map(v=>{const x=Math.max(0,Math.min(255,Math.round(v*m)));return x.toString(16).padStart(2,'0');}).join('');
+  function planeXY(zc,hx,hy,glass){const A=P([-hx,-hy,zc]),B=P([hx,-hy,zc]),C=P([hx,hy,zc]),D=P([-hx,hy,zc]);push(`<polygon points="${[A,B,C,D].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="var(--mesh)" fill-opacity="${glass?0.045:0.02}" stroke="var(--edge)" stroke-width="${f(1*lw)}" stroke-opacity="0.4"/>`);}
+  function box3W(x0,x1,y0,y1,zb,h,base){const zt=zb+h;const xPos=E[0]>((x0+x1)/2),yPos=E[1]>((y0+y1)/2);const xe=xPos?x1:x0,ye=yPos?y1:y0;let s='';
+    if(h>0.001){s+=QUAD(P([xe,y0,zt]),P([xe,y1,zt]),P([xe,y1,zb]),P([xe,y0,zb]),hxsh(base,0.55));s+=QUAD(P([x0,ye,zt]),P([x1,ye,zt]),P([x1,ye,zb]),P([x0,ye,zb]),hxsh(base,0.42));}
+    s+=QUAD(P([x0,y0,zt]),P([x1,y0,zt]),P([x1,y1,zt]),P([x0,y1,zt]),hxsh(base,1));push(s);}
+  function box3ghost(x0,x1,y0,y1,zb,h){const zt=zb+h;const corners=[[x0,y0],[x1,y0],[x1,y1],[x0,y1]];let s='';
+    for(let k=0;k<4;k++){const a=corners[k],b=corners[(k+1)%4];s+=LINE(P([a[0],a[1],zt]),P([b[0],b[1],zt]),'var(--edge)',0.8,0.22,'5 5');}
+    for(const c of corners)s+=LINE(P([c[0],c[1],zb]),P([c[0],c[1],zt]),'var(--edge)',0.8,0.16,'5 5');push(s);}
+  function gradSlabXY(zc,hx,hy){planeXY(zc,hx,hy,true);const K=16;let s='';for(let k=0;k<K;k++){const t=k/(K-1),x=-hx+2*hx*t;s+=LINE(P([x,-hy,zc]),P([x,hy,zc]),hsl2hex(206+k*5,72,60),1.0,0.55);}push(s);}
+  function dieRich(wc,hs,hgt){ // in-perspective 3D die — this generator's own style + colors
+    hs=hs||0.30; hgt=hgt||0.05;                       // world half-size + extrusion height
+    const cx=wc[0],cy=wc[1],cz=wc[2];
+    const x0=cx-hs,x1=cx+hs,y0=cy-hs,y1=cy+hs,zt=cz+hgt;
+    // substrate slab (dark) with slight extrusion — camera-facing walls
+    const xPos=E[0]>cx,yPos=E[1]>cy,xe=xPos?x1:x0,ye=yPos?y1:y0;
+    if(hgt>0.001){push(QUAD(P([xe,y0,zt]),P([xe,y1,zt]),P([xe,y1,cz]),P([xe,y0,cz]),'#0e0f12'));push(QUAD(P([x0,ye,zt]),P([x1,ye,zt]),P([x1,ye,cz]),P([x0,ye,cz]),'#0a0b0d'));}
+    push(QUAD(P([x0,y0,zt]),P([x1,y0,zt]),P([x1,y1,zt]),P([x0,y1,zt]),'#141414'));
+    // frame (silver) + copper inner edge on top face
+    const TL=P([x0,y0,zt]),TR=P([x1,y0,zt]),BR=P([x1,y1,zt]),BL=P([x0,y1,zt]);
+    push(`<polygon points="${[TL,TR,BR,BL].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="#9aa0a6" stroke-width="${f(1.6*lw)}" stroke-opacity="0.9"/>`);
+    const inm=0.12,ix0=x0+(x1-x0)*inm,ix1=x1-(x1-x0)*inm,iy0=y0+(y1-y0)*inm,iy1=y1-(y1-y0)*inm;
+    push(`<polygon points="${[P([ix0,iy0,zt]),P([ix1,iy0,zt]),P([ix1,iy1,zt]),P([ix0,iy1,zt])].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="#C98A4B" stroke-width="${f(1*lw)}" stroke-opacity="0.6"/>`);
+    // iridescent grid cells ON the top face, in perspective — same green palette as now
+    const g=4,pad=0.14,gx0=x0+(x1-x0)*pad,gx1=x1-(x1-x0)*pad,gy0=y0+(y1-y0)*pad,gy1=y1-(y1-y0)*pad;
+    let sgrid='';for(let a=0;a<g;a++)for(let b=0;b<g;b++){const u0=gx0+(gx1-gx0)*a/g,u1=gx0+(gx1-gx0)*(a+0.82)/g,v0=gy0+(gy1-gy0)*b/g,v1=gy0+(gy1-gy0)*(b+0.82)/g;const gu=a/g,gv=b/g;
+      sgrid+=QUAD(P([u0,v0,zt]),P([u1,v0,zt]),P([u1,v1,zt]),P([u0,v1,zt]),hsl2hex(58+gu*80-gv*14,68,54+gu*10));}
+    push(sgrid);
+  }
+  // ---- heavy infrastructure primitives (cover-grade) ----
+  function glowRoute(wa,wb,sw){const a=P(wa),b=P(wb),mx=(a[0]+b[0])/2;const d=`M${f(a[0])},${f(a[1])} C${f(mx)},${f(a[1])} ${f(mx)},${f(b[1])} ${f(b[0])},${f(b[1])}`;
+    push(`<path d="${d}" fill="none" stroke="${accent}" stroke-width="${f((sw||1.6)*lw*2.4)}" stroke-opacity="0.16"/>`);
+    push(`<path d="${d}" fill="none" stroke="${accent}" stroke-width="${f((sw||1.6)*lw)}" stroke-opacity="0.95"/>`);}
+  function densCloud(w,rad,nn){const c=P(w);let s='';for(let k=0;k<(nn||120);k++){const an=rand()*6.283,rr=(rad||60)*Math.pow(rand(),0.6);const dep=rr/(rad||60);s+=`<circle cx="${f(c[0]+Math.cos(an)*rr)}" cy="${f(c[1]+Math.sin(an)*rr*0.62)}" r="${rand()<0.14?1.9:1.15}" fill="var(--dot)" fill-opacity="${f(0.25+0.6*dep+(rand()-0.5)*0.2)}"/>`;}push(s);}
+  // a deep infrastructure core: stacked shaded strata + gradient crown + internal cell texture
+  function infraCore(cx,cy,cz,hx,hy,strata){
+    // draw strata bottom->top for correct overlap (higher z = nearer top)
+    const zB=cz-0.30, layerH=0.60/strata.length;
+    for(let i=0;i<strata.length;i++){const st=strata[i];const z0=zB+i*layerH;const inset=st.inset||0;
+      const x0=cx-hx+inset,x1=cx+hx-inset,y0=cy-hy+inset,y1=cy+hy-inset;
+      box3W(x0,x1,y0,y1,z0,layerH*0.86,st.base);
+      // internal cell texture on the top face of this stratum
+      if(st.cells){const zt=z0+layerH*0.86;const G=st.cells;for(let a=0;a<G;a++)for(let b=0;b<G;b++){const u0=x0+(x1-x0)*a/G,u1=x0+(x1-x0)*(a+0.82)/G,v0=y0+(y1-y0)*b/G,v1=y0+(y1-y0)*(b+0.82)/G;
+        const col=st.grad?hsl2hex(206+((a+b)/(2*G))*40,70,52+18*((a)/G)):hxsh(st.base,1.35);
+        push(QUAD(P([u0,v0,zt]),P([u1,v0,zt]),P([u1,v1,zt]),P([u0,v1,zt]),col, st.grad?0.9:0.5));}}
+    }
+    // gradient crown slab on very top
+    const zc2=zB+strata.length*layerH+0.005;
+    (function(){const K=18;let s2='';for(let k=0;k<K;k++){const t=k/(K-1),x=cx-hx+2*hx*t;s2+=LINE(P([x,cy-hy,zc2]),P([x,cy+hy,zc2]),hsl2hex(206+k*5,74,60),1.1,0.7);}push(s2);
+      const A=P([cx-hx,cy-hy,zc2]),B=P([cx+hx,cy-hy,zc2]),C=P([cx+hx,cy+hy,zc2]),D=P([cx-hx,cy+hy,zc2]);push(`<polygon points="${[A,B,C,D].map(p=>f(p[0])+','+f(p[1])).join(' ')}" fill="none" stroke="var(--edge)" stroke-width="${f(1.2*lw)}" stroke-opacity="0.55"/>`);})();
+    return {top:zc2};
+  }
+  function infraGhost(cx,cy,cz,hx,hy){const z0=cz-0.30,z1=cz+0.32;const cor=[[cx-hx,cy-hy],[cx+hx,cy-hy],[cx+hx,cy+hy],[cx-hx,cy+hy]];let s='';
+    for(let k=0;k<4;k++){const a=cor[k],b=cor[(k+1)%4];s+=LINE(P([a[0],a[1],z1]),P([b[0],b[1],z1]),'var(--edge)',0.9,0.22,'6 6');}
+    for(const c of cor)s+=LINE(P([c[0],c[1],z0]),P([c[0],c[1],z1]),'var(--edge)',0.9,0.14,'6 6');push(s);}
+
+  // ---- ISOMETRIC toolkit (Option C: brand-shape system) ----
+  const C_GREEN='#74C476', C_SAGE='#A6B89A', C_COPPER='#C98A4B';
+  function isoRig(ox,oy,unit){
+    const cs=Math.cos(Math.PI/6),sn=Math.sin(Math.PI/6);
+    const p=(x,y,z)=>[ox+(x-y)*cs*unit, oy+((x+y)*sn - z)*unit];
+    const poly=(pts,col,op,st)=>`<polygon points="${pts.map(v=>f(v[0])+','+f(v[1])).join(' ')}" fill="${col}"${op!=null?` fill-opacity="${op}"`:''}${st?` stroke="${st}" stroke-width="${f(1*lw)}"`:''}/>`;
+    function box(gx,gy,gz,w,d,h,topCol,fillCol,glyph){
+      const A=p(gx,gy,gz),B=p(gx+w,gy,gz),C0=p(gx+w,gy+d,gz),D=p(gx,gy+d,gz);
+      const At=p(gx,gy,gz+h),Bt=p(gx+w,gy,gz+h),Ct=p(gx+w,gy+d,gz+h),Dt=p(gx,gy+d,gz+h);
+      let s='';
+      s+=poly([A,D,Dt,At],fillCol,0.5,'var(--edge)');     // left face
+      s+=poly([D,C0,Ct,Dt],fillCol,0.3,'var(--edge)');    // front face
+      s+=poly([At,Bt,Ct,Dt],topCol,0.92,'var(--edge)');   // top
+      push(s);
+      const ctr=p(gx+w/2,gy+d/2,gz+h);
+      if(glyph==='loop'){push(`<circle cx="${f(ctr[0])}" cy="${f(ctr[1])}" r="${f(unit*0.24)}" fill="none" stroke="var(--bg)" stroke-width="2"/>`);for(let a=0;a<6;a++){const t=a/6*6.283;push(`<circle cx="${f(ctr[0]+Math.cos(t)*unit*0.24)}" cy="${f(ctr[1]+Math.sin(t)*unit*0.24)}" r="1.6" fill="var(--bg)"/>`);}}
+      else if(glyph==='pipe'){for(let k=0;k<4;k++)push(`<line x1="${f(ctr[0]-unit*0.28)}" y1="${f(ctr[1]-9+k*6)}" x2="${f(ctr[0]+unit*0.28)}" y2="${f(ctr[1]-9+k*6)}" stroke="var(--bg)" stroke-width="1.6"/>`);}
+      else if(glyph==='cache'){const G=4;for(let a=0;a<G;a++)for(let b=0;b<G;b++){const u=gx+w*(a+0.14)/G,v=gy+d*(b+0.14)/G,u2=gx+w*(a+0.86)/G,v2=gy+d*(b+0.86)/G;push(poly([p(u,v,gz+h),p(u2,v,gz+h),p(u2,v2,gz+h),p(u,v2,gz+h)],hsl2hex(206+((a+b)/(2*G))*44,66,54),0.85));}}
+      else if(glyph==='model'){for(let k=0;k<14;k++){const an=rand()*6.283,rr=rand()*unit*0.3;push(`<circle cx="${f(ctr[0]+Math.cos(an)*rr)}" cy="${f(ctr[1]+Math.sin(an)*rr*0.6)}" r="1.3" fill="var(--bg)"/>`);}}
+      return ctr;
+    }
+    function ghost(gx,gy,gz,w,d,h){const c=[[gx,gy],[gx+w,gy],[gx+w,gy+d],[gx,gy+d]];let s='';
+      for(let k=0;k<4;k++){const a=c[k],b=c[(k+1)%4];s+=`<line x1="${f(p(a[0],a[1],gz+h)[0])}" y1="${f(p(a[0],a[1],gz+h)[1])}" x2="${f(p(b[0],b[1],gz+h)[0])}" y2="${f(p(b[0],b[1],gz+h)[1])}" stroke="var(--edge)" stroke-width="0.9" stroke-opacity="0.24" stroke-dasharray="5 5"/>`;}
+      for(const cc of c)s+=`<line x1="${f(p(cc[0],cc[1],gz)[0])}" y1="${f(p(cc[0],cc[1],gz)[1])}" x2="${f(p(cc[0],cc[1],gz+h)[0])}" y2="${f(p(cc[0],cc[1],gz+h)[1])}" stroke="var(--edge)" stroke-width="0.9" stroke-opacity="0.16" stroke-dasharray="5 5"/>`;push(s);}
+    function die(gx,gy,gz,sz,checked){sz=sz||1.15;let s='';const A=p(gx,gy,gz),B=p(gx+sz,gy,gz),C0=p(gx+sz,gy+sz,gz),D=p(gx,gy+sz,gz);
+      s+=poly([A,B,C0,D],'#141414',1,'#9aa0a6');const g0=3;
+      for(let a=0;a<g0;a++)for(let b=0;b<g0;b++){const u=gx+sz*(a+0.12)/g0,v=gy+sz*(b+0.12)/g0,u2=gx+sz*(a+0.86)/g0,v2=gy+sz*(b+0.86)/g0;s+=poly([p(u,v,gz),p(u2,v,gz),p(u2,v2,gz),p(u,v2,gz)],hsl2hex(58+(a/g0)*80-(b/g0)*14,68,56),1);}
+      push(s);
+      if(checked){const ck=p(gx+sz+0.4,gy+sz/2,gz+0.5);push(`<circle cx="${f(ck[0])}" cy="${f(ck[1])}" r="8" fill="none" stroke="${C_GREEN}" stroke-width="${f(1.4*lw)}"/><path d="M${f(ck[0]-3.5)},${f(ck[1])} l2.6,3 l5,-6" fill="none" stroke="${C_GREEN}" stroke-width="${f(1.7*lw)}" stroke-linecap="round" stroke-linejoin="round"/>`);}}
+    const conn=(a,b,active)=>{const A=p(a[0],a[1],a[2]),B=p(b[0],b[1],b[2]);push(`<line x1="${f(A[0])}" y1="${f(A[1])}" x2="${f(B[0])}" y2="${f(B[1])}" stroke="${active===false?'var(--edge)':accent}" stroke-width="${f((active===false?1:1.6)*lw)}" stroke-opacity="${active===false?0.4:0.9}"${active===false?' stroke-dasharray="5 5"':''}/>`);};
+    const label=(gx,gy,gz,t,sub,dx,dy)=>{if(!labels)return;const l=p(gx,gy,gz);const X=l[0]+(dx||0),Y=l[1]+(dy||24);push(`<text x="${f(X)}" y="${f(Y)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(11.5*ts)}" letter-spacing="0.12em" fill="var(--edge)">${t}</text>`);if(sub)push(`<text x="${f(X)}" y="${f(Y+13)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(8*ts)}" letter-spacing="0.1em" fill="var(--muted)">${sub}</text>`);};
+    return {p,box,die,ghost,conn,label};
+  }
+
+  // ================= SCENES =================
+  const S={};
+
+  // ---- PLATFORMLESS: layer optimizes, deploys, EXITS — nothing stays behind ----
+  S.platformless=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(380,560,54);
+      R.conn([1.1,1.1,0.55],[4.0,1.4,0.9]); R.conn([5.6,1.4,0.7],[7.6,3.0,0.55]);
+      R.box(0,0,0,2.2,2.2,0.5,C_SAGE,'#3a4a3a','model'); R.label(1.1,2.2,0,'PYTORCH','model.py');
+      R.box(3.7,0.4,0,2.0,2.0,0.32,hsl2hex(210,18,26),'#20242c','cache');
+      R.box(3.8,0.5,0.34,1.8,1.8,0.30,C_COPPER,'#4a3822','pipe');
+      R.box(3.9,0.6,0.66,1.6,1.6,0.30,accent,'#26306e','loop');
+      R.label(4.7,2.5,0.66,'yasp','GAIA · KRONOS · KERNELDB');
+      R.ghost(3.8,0.5,1.2,1.9,1.9,0.3);
+      R.die(7.2,2.4,0,1.3,false); R.label(7.85,3.7,0,'SILICON','any target');
+      caption('PLATFORMLESS AI INFRASTRUCTURE','ONE AGENTIC PLATFORM — GAIA + KRONOS OVER KERNELDB · OPTIMIZE, DEPLOY, EXIT');
+      return;
+    }
+    const STRATA=[
+      {base:[22,24,30],cells:6},                 // KernelDB — dense cache base
+      {base:[30,33,42],cells:5,inset:0.05},      // Kronos stratum
+      {base:[40,44,56],grad:true,inset:0.10}     // Gaia stratum (iridescent)
+    ];
+    if(variant==='B'){ // RICH HORIZONTAL — heavy engineered slab-machine, throughline driving through
+      const mdl=[-1.5,0,0.02], sil=[1.6,0,-0.04];
+      fit([[-1.75,0,0.9],[1.8,0,-0.62],[0,0.62,0.95],[0,-0.62,-0.7]],120);
+      glowRoute(mdl,[0,0,0.02]); glowRoute([0,0,-0.02],sil);      // driven through the core
+      const core=infraCore(0,0,0,0.62,0.5,STRATA);
+      // strata labels on the near face
+      if(labels){const rows=[['GAIA',0.24,'optimize · agents iterate'],['KRONOS',0.06,'deploy · guided pipeline'],['KERNELDB',-0.14,'compounding cache']];
+        for(const[nm,zz,sb] of rows){const p=P([-0.62,-0.5,zz]);push(`<circle cx="${f(p[0]-2)}" cy="${f(p[1]-3)}" r="2.4" fill="${accent}"/><text x="${f(p[0]+8)}" y="${f(p[1])}" font-family="var(--mono)" font-size="${f(10*ts)}" letter-spacing="0.1em" fill="var(--edge)">${nm}</text><text x="${f(p[0]+8)}" y="${f(p[1]+11)}" font-family="var(--mono)" font-size="${f(7.5*ts)}" letter-spacing="0.08em" fill="var(--muted)">${sb}</text>`);}}
+      // exit: the whole machine lifts away, dashed + fading
+      infraGhost(0,0,0.78,0.62,0.5);
+      for(const dx of [-0.34,0,0.34]){seg([dx,0,0.34],[dx,0,0.74],'var(--edge)',0.9,0.34,'6 5');const tp=P([dx,0,0.76]);push(`<path d="M${f(tp[0]-5)},${f(tp[1]+8)} l5,-9 l5,9" fill="none" stroke="var(--edge)" stroke-width="${f(1.1*lw)}" stroke-opacity="0.4"/>`);}
+      densCloud(mdl,58,120); dieRich(sil,0.24,0.05);
+      lbl(mdl,-16,-46,'MODEL','ANY PYTORCH'); lbl(sil,-8,-48,'SILICON','ANY TARGET');
+      if(labels)push(tx([0,0,0.86],-44,0,'yasp exits — no runtime stays resident',10*ts>0?10:10,'var(--muted)'));
+      caption('PLATFORMLESS AI INFRASTRUCTURE','ONE AGENTIC PLATFORM — GAIA + KRONOS OVER KERNELDB · SAME AGENTS, DIFFERENT OUTPUT — OPTIMIZE, DEPLOY, EXIT');
+      return;
+    }
+    // VARIANT A — PLANE-DEPTH EXPLODED, cinematic: model plane above, infra core center, silicon plane below
+    const zModel=1.35, zInfra=0.0, zSil=-1.45;
+    fit([[-1.15,0,zModel+0.4],[1.15,0,zSil-0.35],[0,1.0,zInfra],[0,-1.0,zInfra]],110);
+    glowRoute([0,0,zModel],[0,0,zInfra+0.34]); glowRoute([0,0,zInfra-0.30],[0,0,zSil]);
+    // MODEL plane (glass) + dense cloud
+    planeXY(zModel,1.0,0.66,true); densCloud([0,0,zModel+0.04],66,140);
+    // SILICON plane (glass) + rich die
+    planeXY(zSil,1.0,0.66,true); dieRich([0,0,zSil+0.02],0.34,(opts.dieH==null?0.06:opts.dieH));
+    // the infrastructure core — the hero
+    infraCore(0,0,zInfra,0.66,0.54,STRATA);
+    // strata labels
+    if(labels){const rows=[['GAIA',0.22],['KRONOS',0.02],['KERNELDB',-0.18]];for(const[nm,zz] of rows){push(tx([0.66,0,zInfra+zz],14,0,nm,9*ts>0?9:9,'var(--muted)'));}}
+    infraGhost(0,0,zInfra+0.72,0.66,0.54);
+    for(const dx of [-0.4,0,0.4]){seg([dx,0,zInfra+0.34],[dx,0,zInfra+0.7],'var(--edge)',0.9,0.32,'6 5');}
+    node([0,0,zModel],4.5,accent,1); node([0,0,zSil],4.5,accent,1);
+    lbl([0,0,zModel],-120,-10,'MODELS','ANY PYTORCH');
+    lbl([0,0,zInfra+0.32],120,-6,'yasp','SAME AGENTS · DIFFERENT OUTPUT');
+    lbl([0,0,zSil],120,-6,'SILICON','ANY TARGET');
+    if(labels)push(tx([0,0,zInfra+0.9],110,0,'exits — nothing stays resident',9,'var(--muted)'));
+    caption('PLATFORMLESS AI INFRASTRUCTURE','ONE AGENTIC PLATFORM — GAIA + KRONOS OVER KERNELDB — OPTIMIZE, DEPLOY, EXIT');
+  };
+  // ---- THE PROBLEM: one model, every path to silicon blocked by a distinct barrier ----
+  S.fragmentation=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(300,240,46);
+      const T=['VENDOR SDK','CUSTOM OPS','RE-ENGINEER','MODEL UPDATE','RUNTIME','BLACK BOX'];
+      R.box(0,2.2,0,1.8,1.8,0.45,C_SAGE,'#3a4a3a','model'); R.label(0.9,4.0,0,'ONE MODEL','any pytorch');
+      for(let i=0;i<6;i++){const gy=i*1.45;R.conn([1.8,3.0,0.4],[5.2,gy+0.6,0.2],false);
+        R.box(5.1,gy+0.1,0,0.55,0.55,0.7,'#2a2c31','#17181c');
+        R.die(6.5,gy,0,0.95,false);
+        const dp=R.p(7.9,gy+0.6,0.4);push(`<path d="M${f(dp[0]-6)},${f(dp[1]-6)} l12,12 M${f(dp[0]+6)},${f(dp[1]-6)} l-12,12" stroke="var(--muted)" stroke-width="${f(1.3*lw)}" stroke-opacity="0.7"/>`);
+        R.label(6.95,gy+1.15,0,T[i],'blocked');}
+      caption('EVERY PATH TO SILICON IS BLOCKED','SIX BARRIERS — NONE INTERCHANGEABLE, NONE SCALE');
+      return;
+    }
+    const BARR=[
+      {g:'gate',  t:'VENDOR SDK',   s:'LOCKED TOOLCHAIN'},
+      {g:'bridge',t:'CUSTOM OPS',   s:'NO EXPORT PATH'},
+      {g:'wall',  t:'RE-ENGINEER',  s:'MONTHS PER TARGET'},
+      {g:'loop',  t:'MODEL UPDATE', s:'RESTARTS CYCLE'},
+      {g:'weight',t:'RUNTIME',      s:'STAYS RESIDENT'},
+      {g:'box',   t:'BLACK BOX',    s:"CAN'T CERTIFY"}
+    ];
+    const N=BARR.length;
+    if(variant==='B'){ // HORIZONTAL: one model -> 6 isolated attempts, each blocked, silicon unreachable behind
+      const src=[-1.55,0,0.05];
+      const rows=[];for(let i=0;i<N;i++){const sv=(i-(N-1)/2)/((N-1)/2);rows.push(sv*0.62);}
+      fit([[-1.75,0,0.7],[1.7,0,-0.7],[0,0.4,0],[0,-0.4,0]],118);
+      densCloud(src,46,95);
+      for(let i=0;i<N;i++){const z=rows[i];const bar=[0.35,0,z];const die=[1.4,0,z];
+        glowRoute(src,[bar[0]-0.28,0,z],0.85);
+        // dashed unreachable stub beyond the barrier
+        seg([bar[0]+0.12,0,z],[die[0]-0.18,0,z],'var(--edge)',0.8,0.22,'6 6');
+        push(`<g opacity="0.38">`);dieRich(die,0.11,0.04);push(`</g>`);
+        const c=P(bar);drawBarrier(BARR[i].g,c,accent);
+        if(labels){const p=P(bar);push(`<text x="${f(p[0])}" y="${f(p[1]-24)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(9.5*ts)}" letter-spacing="0.09em" fill="var(--edge)">${BARR[i].t}</text><text x="${f(p[0])}" y="${f(p[1]+28)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(7.5*ts)}" letter-spacing="0.08em" fill="var(--muted)">${BARR[i].s}</text>`);}
+      }
+      lbl(src,-16,-42,'ONE MODEL','ANY PYTORCH');
+      if(labels)push(tx([1.4,0,rows[0]],22,-2,'UNREACHABLE',9,'var(--muted)'));
+      caption('EVERY PATH TO SILICON IS BLOCKED','SIX BARRIERS · SIX SEPARATE EFFORTS — NONE INTERCHANGEABLE, NONE SCALE');
+      return;
+    }
+    // VARIANT A — VERTICAL FAN: one model splinters down into 6 barriered, unreachable targets (far->near)
+    const src=[0,0,1.3];
+    const tgs=[];for(let i=0;i<N;i++){const sx=(i-(N-1)/2)/((N-1)/2);tgs.push([sx*1.1,0,-1.15]);}
+    fit([[-1.3,0,1.55],[1.3,0,-1.5],src,...tgs],110);
+    const barZ=-0.4;
+    // FAR first: dimmed dies + barriers + lanes, model last (near)
+    for(let i=0;i<N;i++){const t=tgs[i];const bw=[t[0],0,barZ];
+      seg(src,[t[0]*0.6,0,0.3],'var(--mesh)',0.9,0.4); seg([t[0]*0.6,0,0.3],[t[0],0,barZ+0.14],'var(--mesh)',0.9,0.35);
+      seg([t[0],0,barZ-0.12],[t[0],0,t[2]+0.16],'var(--edge)',0.8,0.2,'6 6');
+      push(`<g opacity="0.36">`);dieRich(t,0.12,0.045);push(`</g>`);}
+    for(let i=0;i<N;i++){const bw=[tgs[i][0],0,barZ];const c=P(bw);drawBarrier(BARR[i].g,c,accent);
+      if(labels){push(`<text x="${f(c[0])}" y="${f(c[1]-24)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(9.5*ts)}" letter-spacing="0.09em" fill="var(--edge)">${BARR[i].t}</text><text x="${f(c[0])}" y="${f(c[1]+28)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(7*ts)}" letter-spacing="0.08em" fill="var(--muted)">${BARR[i].s}</text>`);}}
+    densCloud(src,26,52); node(src,4.5,accent,1);
+    lbl(src,-16,-34,'ONE MODEL','ANY PYTORCH');
+    if(labels)push(tx(tgs[0],-30,46,'SILICON · UNREACHABLE',9,'var(--muted)'));
+    caption('EVERY PATH TO SILICON IS BLOCKED','SIX BARRIERS — WHY MODELS NEVER REACH THE HARDWARE OF CHOICE');
+  };
+  // recognizable barrier glyphs (screen-space, drawn at projected center c)
+  function drawBarrier(kind,c,A){const x=c[0],y=c[1];const S=(d)=>`<g stroke="${A}" stroke-width="${f(1.6*lw)}" fill="none" stroke-linecap="round">${d}</g>`;
+    if(kind==='gate'){ // locked gate: two posts + bar + padlock
+      push(S(`<line x1="${f(x-13)}" y1="${f(y-12)}" x2="${f(x-13)}" y2="${f(y+12)}"/><line x1="${f(x+13)}" y1="${f(y-12)}" x2="${f(x+13)}" y2="${f(y+12)}"/><line x1="${f(x-13)}" y1="${f(y-4)}" x2="${f(x+13)}" y2="${f(y-4)}"/>`));
+      push(`<rect x="${f(x-5)}" y="${f(y+1)}" width="10" height="9" fill="${A}"/><path d="M${f(x-3)},${f(y+1)} v-3 a3,3 0 0 1 6,0 v3" fill="none" stroke="${A}" stroke-width="${f(1.4*lw)}"/>`);
+    } else if(kind==='bridge'){ // broken bridge: two spans with a gap
+      push(S(`<line x1="${f(x-16)}" y1="${f(y+4)}" x2="${f(x-4)}" y2="${f(y+4)}"/><line x1="${f(x+4)}" y1="${f(y+4)}" x2="${f(x+16)}" y2="${f(y+4)}"/><line x1="${f(x-16)}" y1="${f(y+4)}" x2="${f(x-16)}" y2="${f(y+11)}"/><line x1="${f(x+16)}" y1="${f(y+4)}" x2="${f(x+16)}" y2="${f(y+11)}"/>`));
+      push(`<path d="M${f(x-4)},${f(y+1)} l-3,6 M${f(x+4)},${f(y+1)} l3,6" stroke="${A}" stroke-width="${f(1.3*lw)}" stroke-opacity="0.8"/>`);
+    } else if(kind==='wall'){ // brick wall
+      let d='';for(let r=0;r<3;r++){const yy=y-9+r*7;const off=(r%2)*7;for(let cx=-14+off;cx<15;cx+=14){d+=`<rect x="${f(x+cx)}" y="${f(yy)}" width="12" height="5" fill="none" stroke="${A}" stroke-width="${f(1.1*lw)}"/>`;}}push(`<g>${d}</g>`);
+    } else if(kind==='loop'){ // reset loop: circular arrow
+      push(`<path d="M${f(x+11)},${f(y)} a11,11 0 1 1 -6,-9.5" fill="none" stroke="${A}" stroke-width="${f(1.6*lw)}"/><path d="M${f(x+2)},${f(y-13)} l3,3 l-4,3" fill="none" stroke="${A}" stroke-width="${f(1.5*lw)}"/>`);
+    } else if(kind==='weight'){ // heavy weight/anchor block
+      push(`<path d="M${f(x-11)},${f(y-6)} l22,0 l4,16 l-30,0 z" fill="${A}" fill-opacity="0.25" stroke="${A}" stroke-width="${f(1.5*lw)}"/><text x="${f(x)}" y="${f(y+7)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(9*ts)}" fill="${A}">kg</text>`);
+    } else { // box: sealed opaque black box
+      push(`<rect x="${f(x-13)}" y="${f(y-10)}" width="26" height="20" fill="#000" stroke="${A}" stroke-width="${f(1.5*lw)}"/><line x1="${f(x-13)}" y1="${f(y-10)}" x2="${f(x+13)}" y2="${f(y+10)}" stroke="${A}" stroke-width="${f(1*lw)}" stroke-opacity="0.5"/><line x1="${f(x+13)}" y1="${f(y-10)}" x2="${f(x-13)}" y2="${f(y+10)}" stroke="${A}" stroke-width="${f(1*lw)}" stroke-opacity="0.5"/>`);
+    }
+  }
+  // ---- KRONOS: single guided pipeline -> .engine -> flash to Nvidia (nothing left resident) ----
+  S.kronos=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(320,560,50);
+      R.conn([1.1,1.1,0.55],[3.2,1.1,0.9]); R.conn([5.4,1.1,0.5],[6.3,1.1,0.35]); 
+      R.box(0,0,0,2.0,2.0,0.5,C_SAGE,'#3a4a3a','model'); R.label(1.0,2.0,0,'PYTORCH','model.py');
+      R.box(3.2,0.3,0,2.2,1.6,0.8,C_COPPER,'#4a3822','pipe'); R.label(4.3,1.9,0.8,'KRONOS','guided pipeline · yasp.codegen');
+      R.box(6.1,0.65,0,0.9,0.9,0.5,accent,'#26306e'); R.label(6.55,1.6,0,'.engine','one binary');
+      const NV=['JETSON ORIN','DRIVE AGX','H100','H200'];for(let i=0;i<4;i++){const gy=-1.4+i*1.5;R.conn([7.0,1.1,0.3],[8.1,gy+0.5,0.2]);R.die(8.1,gy,0,1.0,false);R.label(8.6,gy+1.1,0,NV[i],'');}
+      caption('KRONOS — DETERMINISTIC DEPLOYMENT','ONE GUIDED PIPELINE → .engine → FLASH TO NVIDIA · NOTHING LEFT RESIDENT');
+      return;
+    }
+    const NV=[['JETSON ORIN','edge'],['DRIVE AGX','automotive'],['H100','datacenter'],['H200','datacenter']];
+    const STG=[['LOWER · IR',[30,32,40],false],['GRAPH OPT',[34,37,47],false],['yasp.codegen',[0,0,0],true],['ASSEMBLE',[40,43,55],false],['VALIDATE',[46,49,62],false]];
+    if(variant==='B'){ // HORIZONTAL FLOW — the "weeks -> minutes" collapse into one guided machine
+      const mdl=[-1.5,0,0.05];
+      const pipe=[-0.25,0,0];               // guided-pipeline machine center (bigger, central)
+      const eng=[0.72,0,0];
+      const N=NV.length,tg=[];for(let i=0;i<N;i++){const sv=(i-(N-1)/2)/((N-1)/2);tg.push([1.5,0,sv*0.5]);}  // tight vertical column
+      fit([[-1.7,0,0.7],[1.75,0,-0.62],[0,0.5,0.55],...tg],118);
+      const px0=pipe[0]-0.52,px1=pipe[0]+0.52;
+      // collapse ghosts (weeks of manual work) folding into the pipeline mouth — clearer, above the flow
+      if(labels){const junk=['TensorRT wrangling','environment mgmt','ONNX conversion','unsupported ops','re-test per target'];
+        for(let i=0;i<junk.length;i++){const gw=[-1.15+i*0.02,0,0.92-i*0.12];const p=P(gw);
+          push(`<text x="${f(p[0])}" y="${f(p[1])}" font-family="var(--mono)" font-size="${f(8.5*ts)}" letter-spacing="0.06em" fill="var(--muted)" opacity="0.62">${junk[i]}</text>`);
+          seg([gw[0]+0.18,0,gw[2]],[pipe[0]-0.5,0,0.12],'var(--edge)',0.6,0.16,'4 5');}
+        push(tx([-0.95,0,1.02],-6,0,'WEEKS OF MANUAL WORK',8.5,'var(--muted)'));}
+      const mzc=-0.2+0.4*0.5;
+      glowRoute(mdl,[px0,0,mzc]); glowRoute([px1,0,mzc],eng);
+      densCloud(mdl,50,110);
+      // the guided pipeline machine: heavier horizontal body with internal step chambers
+      box3W(px0,px1,-0.4,0.4,-0.2,0.4,[26,28,36]);
+      const zt=0.2;for(let i=0;i<STG.length;i++){const u0=px0+(px1-px0)*(i+0.10)/STG.length,u1=px0+(px1-px0)*(i+0.90)/STG.length;
+        const col=STG[i][2]?hsl2hex(210,72,58):hxsh(STG[i][1],1.4);push(QUAD(P([u0,-0.3,zt]),P([u1,-0.3,zt]),P([u1,0.3,zt]),P([u0,0.3,zt]),col,STG[i][2]?0.92:0.62));}
+      // gradient crown on the machine top edge for material richness
+      (function(){const K=12;let g='';for(let k=0;k<K;k++){const t=k/(K-1),x=px0+(px1-px0)*t;g+=LINE(P([x,-0.4,zt+0.001]),P([x,0.4,zt+0.001]),hsl2hex(206+k*5,70,58),0.9,0.28);}push(g);})();
+      if(labels){push(tx(pipe,-30,-58,'KRONOS',13,'var(--edge)'));push(tx(pipe,-30,-45,'single guided pipeline · yasp.codegen',8.5,'var(--muted)'));}
+      // .engine block
+      (function(){const c=P(eng);push(`<rect x="${f(c[0]-27)}" y="${f(c[1]-19)}" width="54" height="38" fill="var(--mesh)" fill-opacity="0.06" stroke="var(--edge)" stroke-width="${f(1.4*lw)}"/><rect x="${f(c[0]-27)}" y="${f(c[1]-19)}" width="54" height="6" fill="${accent}"/>`);})();
+      lbl(eng,-14,36,'.engine','ONE BINARY');
+      // fan-out to Nvidia 3D dies (tight column)
+      for(let i=0;i<N;i++){glowRoute(eng,tg[i],1.1);dieRich(tg[i],0.13,0.045);if(labels){const p=P(tg[i]);push(`<text x="${f(p[0]+22)}" y="${f(p[1]-1)}" font-family="var(--mono)" font-size="${f(8.5*ts)}" letter-spacing="0.07em" fill="var(--edge)">${NV[i][0]}</text><text x="${f(p[0]+22)}" y="${f(p[1]+9)}" font-family="var(--mono)" font-size="${f(6.5*ts)}" fill="var(--muted)">${NV[i][1]}</text>`);}}
+      lbl(mdl,-16,-38,'PYTORCH','MODEL');
+      caption('KRONOS — DETERMINISTIC DEPLOYMENT','WEEKS OF TENSORRT / ONNX / RE-TEST → ONE GUIDED PIPELINE → .engine · NO RUNTIME OR VENDOR SDK LEFT');
+      return;
+    }
+    // VARIANT A — EXPLODED VERTICAL: model plane -> guided-pipeline stage stack -> .engine -> Nvidia plane
+    const zModel=1.55, zTop=1.0, zBot=-0.15, zEng=-0.7, zSil=-1.6;
+    const zAt=i=>lerp(zTop,zBot,i/(STG.length-1));
+    fit([[-1.15,0,zModel+0.4],[1.15,0,zSil-0.35],[0,0.9,0],[0,-0.9,0]],110);
+    glowRoute([0,0,zModel],[0,0,zTop]); glowRoute([0,0,zBot],[0,0,zEng+0.12]); 
+    planeXY(zModel,1.0,0.64,true); densCloud([0,0,zModel+0.04],62,130);
+    // stage plates (the single guided pipeline, exploded)
+    for(let i=0;i<STG.length;i++){const z=zAt(i);
+      if(STG[i][2]){box3W(-0.55,0.55,-0.42,0.42,z,0.05,[24,26,33]);gradSlabXY(z+0.055,0.5,0.38);}
+      else box3W(-0.55,0.55,-0.42,0.42,z,0.06,STG[i][1]);
+      if(labels)push(tx([0.55,0,z+0.03],16,3,STG[i][0],10,'var(--edge)'));}
+    // .engine solid block
+    box3W(-0.34,0.34,-0.3,0.3,zEng,0.16,[38,40,50]);
+    (function(){const zt=zEng+0.16;push(QUAD(P([-0.34,-0.3,zt]),P([0.34,-0.3,zt]),P([0.34,0.3,zt]),P([-0.34,0.3,zt]),accent,0.92));})();
+    lbl([0,0,zEng+0.08],48,4,'.engine','ONE BINARY');
+    // Nvidia targets plane + 3D dies fanning out
+    planeXY(zSil,1.05,0.6,true);
+    const N=NV.length;for(let i=0;i<N;i++){const sx=(i-(N-1)/2)/((N-1)/2);const t=[sx*0.72,0,zSil+0.02];glowRoute([0,0,zEng],t,1.1);dieRich(t,0.15,0.05);
+      if(labels){const p=P(t);push(`<text x="${f(p[0])}" y="${f(p[1]+30)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(8*ts)}" letter-spacing="0.06em" fill="var(--edge)">${NV[i][0]}</text>`);}}
+    node([0,0,zModel],4.5,accent,1);
+    lbl([0,0,zModel],-118,-8,'PYTORCH','MODEL'); 
+    lbl([0,0,zSil],-150,0,'NVIDIA','ANY TARGET');
+    caption('KRONOS — DETERMINISTIC DEPLOYMENT','ONE GUIDED PIPELINE → .engine → FLASH TO NVIDIA · NO RUNTIME OR VENDOR SDK LEFT IN PRODUCTION');
+  };
+  // ---- GAIA: agents iterate on kernels (CUDA/HIP/Triton) -> race/eval -> KernelDB -> AMD/Nvidia/Trainium ----
+  S.gaia=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(360,540,50);
+      R.conn([0.9,0.9,0.55],[3.4,1.3,0.72]);
+      R.box(0,0,0,1.7,1.7,0.5,C_SAGE,'#3a4a3a','model'); R.label(0.85,1.7,0,'GRAPH IN','candidates');
+      R.box(3.0,0.2,0,2.2,2.2,0.3,hsl2hex(210,18,26),'#20242c','cache'); R.label(4.1,2.6,0,'KERNELDB','winners compound',0,44);
+      R.box(3.5,0.7,0.32,1.4,1.4,0.4,accent,'#26306e','loop'); R.label(4.2,2.2,0.72,'GAIA','agents iterate');
+      const VN=['AMD','NVIDIA','AWS'];for(let i=0;i<3;i++){const gy=-0.7+i*1.5;R.conn([5.4,1.3,0.4],[6.7,gy+0.5,0.2]);R.die(6.7,gy,0,1.0,false);R.label(7.15,gy+1.1,0,VN[i],'');}
+      caption('GAIA — AGENTIC OPTIMIZATION','AGENTS ITERATE ON KERNELS · CUDA/HIP/TRITON → KERNELDB → ANY VENDOR');
+      return;
+    }
+    const VEND=[['AMD','MI300X · HIP'],['NVIDIA','H100 · CUDA'],['AWS','Trainium · Triton']];
+    if(variant==='B'){ // HORIZONTAL ITERATE-AND-RACE: graph in -> race lanes -> winner -> KernelDB -> optimized out
+      const gin=[-1.55,0,0.05];
+      const lanes=['CUDA','HIP','TRITON']; const lx0=-0.75,lx1=0.35;         // race track x-span
+      const kdb=[0.85,0,0];                                                  // KernelDB core
+      const out=[1.55,0,0];
+      fit([[-1.75,0,0.7],[1.75,0,-0.6],[0,0.55,0.55],[0,-0.55,-0.55]],120);
+      densCloud(gin,44,90);
+      // race lanes: candidate kernels k1..kn marching right; a winner highlighted per lane
+      for(let L=0;L<lanes.length;L++){const ly=(L-(lanes.length-1)/2)*0.34;
+        seg([lx0-0.05,ly,0.02],[lx1+0.05,ly,0.02],'var(--edge)',0.7,0.22);   // lane rail
+        const nK=5, win=1+Math.floor(rand()*(nK-1));
+        for(let k=0;k<nK;k++){const kx=lx0+(lx1-lx0)*k/(nK-1);const isW=(k===win);
+          const w=[kx,ly,0.02];const c=P(w);
+          if(isW){push(`<rect x="${f(c[0]-7)}" y="${f(c[1]-7)}" width="14" height="14" fill="${accent}" fill-opacity="0.9"/>`);}
+          else push(`<rect x="${f(c[0]-6)}" y="${f(c[1]-6)}" width="12" height="12" fill="var(--mesh)" fill-opacity="0.2" stroke="var(--edge)" stroke-width="${f(0.8*lw)}" stroke-opacity="0.5"/>`);}
+        if(labels){const p=P([lx0-0.12,ly,0.02]);push(`<text x="${f(p[0]-4)}" y="${f(p[1]+3)}" text-anchor="end" font-family="var(--mono)" font-size="${f(9*ts)}" letter-spacing="0.08em" fill="var(--edge)">${lanes[L]}</text>`);}
+        glowRoute(gin,[lx0,ly,0.02],0.9);                                    // graph feeds each lane
+        glowRoute([lx1,ly,0.02],kdb,1.0);                                    // winners flow to KernelDB
+      }
+      // eval-vs-reference bracket under the track
+      if(labels){const p=P([(lx0+lx1)/2,0.62,0.02]);push(`<text x="${f(p[0])}" y="${f(p[1])}" text-anchor="middle" font-family="var(--mono)" font-size="${f(8.5*ts)}" letter-spacing="0.1em" fill="var(--muted)">eval vs PyTorch reference · keep iterating</text>`);}
+      // KernelDB core (die-styled cache) + ring
+      dieRich(kdb,0.2,0.07); ring(kdb,30,accent,0.45);
+      glowRoute(kdb,out,1.2);
+      densCloud(out,30,50);
+      lbl(gin,-14,-34,'GRAPH IN','CANDIDATES'); lbl(kdb,-20,44,'KERNELDB','WINNERS STORED'); lbl(out,-10,-34,'OPTIMIZED','MODEL OUT');
+      caption('GAIA — AGENTIC OPTIMIZATION','AGENTS ITERATE ON KERNELS · CUDA / HIP / TRITON · RACED vs PYTORCH REF → KERNELDB → ANY VENDOR');
+      return;
+    }
+    // VARIANT A — DESCENDING AGENTIC STACK — drawn FAR->NEAR (bottom-first) for correct occlusion
+    const zModel=1.5, zTop=0.95, zBot=-0.35, zKdb=-0.95, zSil=-1.85;
+    const STG=[['PROFILE',[30,32,40],false],['GENERATE',[34,37,47],false],['RACE',[0,0,0],'race'],['EVALUATE',[42,45,57],false]];
+    const zAt=i=>lerp(zTop,zBot,i/(STG.length-1));
+    fit([[-1.15,0,zModel+0.4],[1.15,0,zSil-0.4],[0,0.9,0],[0,-0.9,0]],110);
+    // throughline first (sits behind the floating planes; shows through the gaps)
+    glowRoute([0,0,zModel],[0,0,zTop]); glowRoute([0,0,zBot],[0,0,zKdb+0.16]); glowRoute([0,0,zKdb-0.16],[0,0,zSil+0.2]);
+    // --- FAR (bottom) FIRST ---
+    // vendor plane + dies (farthest)
+    planeXY(zSil,1.05,0.58,true);
+    for(let i=0;i<VEND.length;i++){const sx=(i-1)*0.68;const t=[sx,0,zSil+0.02];glowRoute([0,0,zKdb-0.12],t,1.1);dieRich(t,0.15,0.05);
+      if(labels){const p=P(t);push(`<text x="${f(p[0])}" y="${f(p[1]+30)}" text-anchor="middle" font-family="var(--mono)" font-size="${f(8*ts)}" letter-spacing="0.06em" fill="var(--edge)">${VEND[i][0]}</text>`);}}
+    lbl([0,0,zSil],-150,0,'ANY VENDOR','');
+    // KernelDB core (detailed cache) — above vendor plane
+    (function(){const hx=0.5,hy=0.4;box3W(-hx,hx,-hy,hy,zKdb-0.06,0.14,[22,24,30]);const zt=zKdb+0.085;const G=6;
+      for(let a=0;a<G;a++)for(let b=0;b<G;b++){const u0=-hx+2*hx*(a+0.08)/G,u1=-hx+2*hx*(a+0.92)/G,v0=-hy+2*hy*(b+0.08)/G,v1=-hy+2*hy*(b+0.92)/G;
+        const stored=((a*7+b*3+seed)%3!==0);push(QUAD(P([u0,v0,zt]),P([u1,v0,zt]),P([u1,v1,zt]),P([u0,v1,zt]),stored?hsl2hex(206+((a+b)/(2*G))*46,72,52+16*(a/G)):'#15161a',stored?0.92:0.5));}
+      const K=14;let g='';for(let k=0;k<K;k++){const t=k/(K-1),x=-hx+2*hx*t;g+=LINE(P([x,-hy,zt+0.002]),P([x,hy,zt+0.002]),hsl2hex(206+k*5,74,60),0.9,0.3);}push(g);})();
+    lbl([0,0,zKdb+0.1],70,-4,'KERNELDB','WINNERS COMPOUND');
+    // agentic stage plates — draw LOW z (far) to HIGH z (near): EVALUATE, RACE, GENERATE, PROFILE
+    for(let i=STG.length-1;i>=0;i--){const z=zAt(i);
+      if(STG[i][2]==='race'){box3W(-0.58,0.58,-0.44,0.44,z,0.05,[24,26,33]);const zt=z+0.055;const lanes=3,nK=4;
+        for(let L=0;L<lanes;L++){const ly=-0.30+L*0.30;const win=1+Math.floor(rand()*(nK-1));
+          for(let k=0;k<nK;k++){const kx=-0.42+0.84*k/(nK-1);const u0=kx-0.06,u1=kx+0.06,v0=ly-0.05,v1=ly+0.05;const isW=(k===win);
+            push(QUAD(P([u0,v0,zt]),P([u1,v0,zt]),P([u1,v1,zt]),P([u0,v1,zt]),isW?accent:hxsh([70,74,84],1),isW?0.95:0.5));}}
+        if(labels)push(tx([0.58,0,z+0.03],16,3,'RACE · CUDA/HIP/TRITON',9.5,'var(--edge)'));
+      } else { box3W(-0.55,0.55,-0.42,0.42,z,0.06,STG[i][1]); if(labels)push(tx([0.55,0,z+0.03],16,3,STG[i][0],10,'var(--edge)')); }
+    }
+    // model / graph plane (nearest)
+    planeXY(zModel,1.0,0.62,true); densCloud([0,0,zModel+0.04],60,125); node([0,0,zModel],4.5,accent,1);
+    lbl([0,0,zModel],-120,-8,'GRAPH IN','CANDIDATES');
+    // feedback return arc + caption on top
+    (function(){const a=P([0.5,0,zKdb+0.02]),topN=P([0.62,0,zTop-0.05]);const midx=Math.max(a[0],topN[0])+150;
+      push(`<path d="M${f(a[0])},${f(a[1])} C${f(midx)},${f(a[1])} ${f(midx)},${f(topN[1])} ${f(topN[0])},${f(topN[1])}" fill="none" stroke="${accent}" stroke-width="${f(1.3*lw)}" stroke-opacity="0.7" stroke-dasharray="7 5"/>`);
+      push(`<path d="M${f(topN[0]+7)},${f(topN[1]-4)} l-8,4 l8,4" fill="none" stroke="${accent}" stroke-width="${f(1.3*lw)}" stroke-opacity="0.8"/>`);
+      if(labels)push(`<text x="${f(midx+6)}" y="${f((a[1]+topN[1])/2)}" font-family="var(--mono)" font-size="${f(8.5*ts)}" letter-spacing="0.1em" fill="var(--muted)">keep iterating</text>`);})();
+    caption('GAIA — AGENTIC OPTIMIZATION','PROFILE · GENERATE · RACE · EVALUATE → KERNELDB · AGENTS ITERATE, EVERY PASS COMPOUNDS');
+  };
+
+
+  // ---- TOGETHER: same platform, same agents, different output — Gaia optimize -> Kronos deploy ----
+  S.together=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(320,520,48);
+      R.box(2.6,0.2,-0.36,4.2,2.2,0.26,hsl2hex(210,18,24),'#1c1f26','cache'); R.label(4.7,2.8,-0.36,'SHARED KERNELDB','same agents',0,46);
+      R.conn([0.9,0.9,0.55],[2.8,1.0,0.6]); R.conn([4.5,1.0,0.6],[5.4,1.0,0.6]);
+      R.box(0,0,0,1.8,1.8,0.5,C_SAGE,'#3a4a3a','model'); R.label(0.9,1.8,0,'PYTORCH','model');
+      R.box(2.8,0.2,0,1.7,1.6,0.5,accent,'#26306e','loop'); R.label(3.65,1.8,0,'GAIA','optimize');
+      R.box(4.8,0.2,0,1.7,1.6,0.5,C_COPPER,'#4a3822','pipe'); R.label(5.65,1.8,0,'KRONOS','deploy');
+      for(let i=0;i<4;i++){const gy=-0.9+i*1.45;R.conn([6.5,1.0,0.5],[7.7,gy+0.5,0.2]);R.die(7.7,gy,0,0.95,true);}
+      caption('ONE PIPELINE, TWO PRODUCTS','SAME PLATFORM · SAME AGENTS · DIFFERENT OUTPUT');
+      return;
+    }
+    if(variant==='B'){ // HORIZONTAL: shared model -> GAIA stage -> KRONOS stage -> fan-out (KernelDB shared beneath)
+      const mdl=[-1.6,0,0.05], gaia=[-0.55,0,0.05], kron=[0.35,0,0.05];
+      const N=5,tg=[];for(let i=0;i<N;i++){const sv=(i-(N-1)/2)/((N-1)/2);tg.push([1.5,0,sv*0.5]);}
+      fit([[-1.8,0,0.7],[1.75,0,-0.62],[0,0.5,0.55],...tg],118);
+      // shared KernelDB slab beneath both products
+      (function(){const zb=-0.5;box3W(-0.95,0.75,-0.34,0.34,zb,0.1,[22,24,30]);const zt=zb+0.1;const G=8;
+        for(let a=0;a<G;a++){const u0=-0.95+1.7*(a+0.1)/G,u1=-0.95+1.7*(a+0.9)/G;push(QUAD(P([u0,-0.28,zt]),P([u1,-0.28,zt]),P([u1,0.28,zt]),P([u0,0.28,zt]),hsl2hex(206+a/G*40,60,44),0.55));}})();
+      if(labels)push(tx([-0.1,0,-0.5],-30,44,'SHARED KERNELDB · SAME AGENTS',8.5,'var(--muted)'));
+      glowRoute(mdl,[gaia[0]-0.24,0,0.05]); glowRoute([gaia[0]+0.24,0,0.05],[kron[0]-0.22,0,0.05]); 
+      densCloud(mdl,48,100);
+      // GAIA megastage (loop glyph, extruded pad)
+      (function(){box3W(gaia[0]-0.24,gaia[0]+0.24,-0.26,0.26,0,0.12,[34,37,47]);const c=P([gaia[0],0,0.13]);ring([gaia[0],0,0.14],24,accent,0.8);for(let a=0;a<8;a++){const t=a/8*6.283;push(`<circle cx="${f(c[0]+Math.cos(t)*15)}" cy="${f(c[1]+Math.sin(t)*15)}" r="2" fill="${accent}"/>`);}})();
+      // KRONOS megastage (pipeline glyph, extruded pad)
+      (function(){box3W(kron[0]-0.22,kron[0]+0.22,-0.26,0.26,0,0.12,[30,33,42]);const c=P([kron[0],0,0.13]);for(let k=0;k<4;k++)push(`<line x1="${f(c[0]-14)}" y1="${f(c[1]-12+k*8)}" x2="${f(c[0]+14)}" y2="${f(c[1]-12+k*8)}" stroke="${accent}" stroke-width="${f(1.1*lw)}" stroke-opacity="0.8"/>`);})();
+      // fan-out to 3D dies (verify checks)
+      for(let i=0;i<N;i++){glowRoute([kron[0]+0.22,0,0.05],tg[i],1.1);dieRich(tg[i],0.12,0.045);}
+      lbl(mdl,-14,-36,'PYTORCH','MODEL'); lbl([gaia[0],0,0.13],-18,-42,'GAIA','optimize'); lbl([kron[0],0,0.13],-20,-42,'KRONOS','deploy');
+      if(labels)push(tx(tg[0],24,0,'ANY TARGET',9,'var(--edge)'));
+      caption('ONE PIPELINE, TWO PRODUCTS','SAME PLATFORM · SAME AGENTS · DIFFERENT OUTPUT — GAIA OPTIMIZES, KRONOS DEPLOYS');
+      return;
+    }
+    // VARIANT A — DESCENDING: model -> GAIA layer -> KRONOS layer -> silicon targets (KernelDB core between), far->near
+    const zModel=1.45, zGaia=0.55, zKron=-0.35, zKdb=-1.0, zSil=-1.75;
+    fit([[-1.15,0,zModel+0.4],[1.15,0,zSil-0.4],[0,0.9,0],[0,-0.9,0]],110);
+    glowRoute([0,0,zModel],[0,0,zGaia+0.14]); glowRoute([0,0,zGaia-0.1],[0,0,zKron+0.14]); glowRoute([0,0,zKron-0.1],[0,0,zKdb+0.14]); glowRoute([0,0,zKdb-0.14],[0,0,zSil+0.2]);
+    // FAR->NEAR: silicon plane first
+    planeXY(zSil,1.05,0.6,true);
+    const N=4;for(let i=0;i<N;i++){const sx=(i-(N-1)/2)/((N-1)/2);const t=[sx*0.72,0,zSil+0.02];glowRoute([0,0,zKdb-0.1],t,1.05);dieRich(t,0.14,0.05);}
+    lbl([0,0,zSil],-150,0,'SILICON','ANY TARGET');
+    // shared KernelDB core
+    (function(){const hx=0.5,hy=0.4;box3W(-hx,hx,-hy,hy,zKdb-0.06,0.13,[22,24,30]);const zt=zKdb+0.08;const G=6;
+      for(let a=0;a<G;a++)for(let b=0;b<G;b++){const u0=-hx+2*hx*(a+0.08)/G,u1=-hx+2*hx*(a+0.92)/G,v0=-hy+2*hy*(b+0.08)/G,v1=-hy+2*hy*(b+0.92)/G;
+        const st=((a*5+b*3+seed)%3!==0);push(QUAD(P([u0,v0,zt]),P([u1,v0,zt]),P([u1,v1,zt]),P([u0,v1,zt]),st?hsl2hex(206+((a+b)/(2*G))*44,70,50+16*(a/G)):'#15161a',st?0.9:0.5));}})();
+    lbl([0,0,zKdb+0.08],72,-4,'KERNELDB','SHARED · SAME AGENTS');
+    // KRONOS layer (deploy) — pipeline glyph plate
+    (function(){box3W(-0.55,0.55,-0.42,0.42,zKron,0.07,[30,33,42]);const zt=zKron+0.075;for(let k=0;k<4;k++){const y=-0.24+k*0.16;push(LINE(P([-0.34,y,zt]),P([0.34,y,zt]),accent,1.0,0.75));}})();
+    if(labels)push(tx([0.55,0,zKron+0.04],16,3,'KRONOS · deploy',10,'var(--edge)'));
+    // GAIA layer (optimize) — loop glyph plate
+    (function(){box3W(-0.55,0.55,-0.42,0.42,zGaia,0.07,[34,37,47]);const zt=zGaia+0.075;const c=P([0,0,zt]);ring([0,0,zt],26,accent,0.8);for(let a=0;a<8;a++){const t=a/8*6.283;push(`<circle cx="${f(c[0]+Math.cos(t)*17)}" cy="${f(c[1]+Math.sin(t)*17*0.6)}" r="2" fill="${accent}"/>`);}})();
+    if(labels)push(tx([0.55,0,zGaia+0.04],16,3,'GAIA · optimize',10,'var(--edge)'));
+    // model plane (nearest)
+    planeXY(zModel,1.0,0.62,true); densCloud([0,0,zModel+0.04],58,120); node([0,0,zModel],4.5,accent,1);
+    lbl([0,0,zModel],-118,-8,'PYTORCH','MODEL');
+    caption('ONE PIPELINE, TWO PRODUCTS','SAME PLATFORM · SAME AGENTS · DIFFERENT OUTPUT — GAIA OPTIMIZES, KRONOS DEPLOYS');
+  };
+  // ---- PROVEN: verified deployments landing on real silicon ----
+  function verifyMark(w,r,col){col=col||accent;const c=P(w);push(`<circle cx="${f(c[0])}" cy="${f(c[1])}" r="${f(r)}" fill="none" stroke="${col}" stroke-width="${f(1.4*lw)}" stroke-opacity="0.85"/><path d="M${f(c[0]-r*0.4)},${f(c[1])} l${f(r*0.28)},${f(r*0.34)} l${f(r*0.55)},${f(-r*0.62)}" fill="none" stroke="${col}" stroke-width="${f(1.8*lw)}" stroke-linecap="round" stroke-linejoin="round"/>`);}
+  // ---- THE PIPELINE: end-to-end train->optimize->deploy->run · SAME PIPELINE EVERY TIME ----
+  S.pipeline=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(300,540,48);
+      R.conn([0.9,0.9,0.55],[2.8,0.9,0.5]); R.conn([4.5,0.9,0.5],[5.4,0.9,0.5]);
+      R.box(0,0,0,1.8,1.8,0.5,C_SAGE,'#3a4a3a','model'); R.label(0.9,1.8,0,'PYTORCH','model.py');
+      R.box(2.8,0.1,0,1.6,1.6,0.5,accent,'#26306e','loop'); R.label(3.6,1.7,0,'GAIA','optimize');
+      R.box(4.7,0.1,0,1.6,1.6,0.5,C_COPPER,'#4a3822','pipe'); R.label(5.5,1.7,0,'KRONOS','deploy');
+      const N=5;for(let i=0;i<N;i++){const gy=-1.7+i*1.4;R.conn([6.3,0.9,0.5],[7.6,gy+0.5,0.2]);R.die(7.6,gy,0,0.95,true);}
+      R.label(8.15,-1.7+4*1.4,0,'5+ TARGETS','verified',0,12);
+      if(labels){const trg=['MODEL UPDATE','NEW CHIP','NEW HARDWARE GEN'];push(`<text x="60" y="188" font-family="var(--mono)" font-size="${f(9*ts)}" letter-spacing="0.1em" fill="var(--edge)">SAME PIPELINE:</text>`);for(let i=0;i<trg.length;i++)push(`<text x="60" y="${f(208+i*19)}" font-family="var(--mono)" font-size="${f(8.5*ts)}" letter-spacing="0.08em" fill="var(--muted)">${trg[i]}</text>`);}
+      caption('THE FULL PIPELINE — TRAIN → OPTIMIZE → DEPLOY → RUN','SAME PIPELINE EVERY TIME');
+      return;
+    }
+    const green='#74C476';
+    const TR=['MODEL UPDATE','NEW CHIP','NEW HARDWARE GEN'];
+    if(variant==='B'){ // HORIZONTAL end-to-end (matches the spec): PyTorch -> Gaia -> Kronos -> fan-out w/ green checks
+      const mdl=[-1.62,0,0.05], gaia=[-0.5,0,0.05], kron=[0.42,0,0.05];
+      const N=5,tg=[];for(let i=0;i<N;i++){const sv=(i-(N-1)/2)/((N-1)/2);tg.push([1.55,0,sv*0.55]);}
+      fit([[-1.85,0,0.85],[1.8,0,-0.68],[0,0.55,0.5],...tg],116);
+      // same-pipeline change triggers feeding the one entry (dashed, converging)
+      if(labels){for(let i=0;i<TR.length;i++){const gw=[-1.75,0,0.72-i*0.2];const p=P(gw);
+        push(`<text x="${f(p[0])}" y="${f(p[1])}" font-family="var(--mono)" font-size="${f(8*ts)}" letter-spacing="0.06em" fill="var(--muted)" opacity="0.7">${TR[i]}</text>`);
+        seg([gw[0]+0.36,0,gw[2]],[mdl[0]-0.06,0,0.15],'var(--edge)',0.6,0.18,'4 5');}
+        push(tx([-1.75,0,0.9],-4,0,'ANY CHANGE →',8,'var(--muted)'));}
+      glowRoute(mdl,[gaia[0]-0.24,0,0.05]); glowRoute([gaia[0]+0.24,0,0.05],[kron[0]-0.22,0,0.05]);
+      densCloud(mdl,46,96);
+      // GAIA (optimize) pad
+      (function(){box3W(gaia[0]-0.24,gaia[0]+0.24,-0.26,0.26,0,0.12,[34,37,47]);const c=P([gaia[0],0,0.13]);ring([gaia[0],0,0.14],23,accent,0.8);for(let a=0;a<8;a++){const t=a/8*6.283;push(`<circle cx="${f(c[0]+Math.cos(t)*14)}" cy="${f(c[1]+Math.sin(t)*14)}" r="2" fill="${accent}"/>`);}})();
+      // KRONOS (deploy) pad
+      (function(){box3W(kron[0]-0.22,kron[0]+0.22,-0.26,0.26,0,0.12,[30,33,42]);const c=P([kron[0],0,0.13]);for(let k=0;k<4;k++)push(`<line x1="${f(c[0]-13)}" y1="${f(c[1]-12+k*8)}" x2="${f(c[0]+13)}" y2="${f(c[1]-12+k*8)}" stroke="${accent}" stroke-width="${f(1.1*lw)}" stroke-opacity="0.8"/>`);})();
+      // fan-out to 5 targets with GREEN checkmarks (docked to kronos right face)
+      for(let i=0;i<N;i++){glowRoute([kron[0]+0.22,0,0.05],tg[i],1.1);dieRich(tg[i],0.12,0.045);verifyMark([tg[i][0],0,tg[i][2]],16,green);}
+      lbl(mdl,-14,-38,'PYTORCH','MODEL'); lbl([gaia[0],0,0.13],-18,-44,'GAIA','optimize'); lbl([kron[0],0,0.13],-20,-44,'KRONOS','deploy');
+      if(labels)push(tx(tg[0],24,-2,'5+ HARDWARE TARGETS',9,'var(--edge)'));
+      caption('THE FULL PIPELINE — TRAIN → OPTIMIZE → DEPLOY → RUN','SAME PIPELINE EVERY TIME · UPDATE MODEL? NEW CHIP? NEW HARDWARE GEN? — SAME PIPELINE');
+      return;
+    }
+    // VARIANT A — DESCENDING end-to-end: inputs -> GAIA -> KRONOS -> verified targets (far->near)
+    const zIn=1.45, zGaia=0.55, zKron=-0.35, zSil=-1.55;
+    fit([[-1.15,0,zIn+0.4],[1.15,0,zSil-0.4],[0,0.9,0],[0,-0.9,0]],110);
+    glowRoute([0,0,zIn],[0,0,zGaia+0.14]); glowRoute([0,0,zGaia-0.1],[0,0,zKron+0.14]); glowRoute([0,0,zKron-0.1],[0,0,zSil+0.2]);
+    // FAR: verified silicon plane (5 targets, green checks)
+    planeXY(zSil,1.08,0.6,true);
+    const N=5;for(let i=0;i<N;i++){const sx=(i-(N-1)/2)/((N-1)/2);const t=[sx*0.8,0,zSil+0.02];glowRoute([0,0,zKron-0.1],t,1.05);dieRich(t,0.12,0.045);verifyMark([t[0],0,t[2]],15,green);}
+    lbl([0,0,zSil],-155,0,'5+ TARGETS','VERIFIED');
+    // KRONOS layer (deploy)
+    (function(){box3W(-0.55,0.55,-0.42,0.42,zKron,0.07,[30,33,42]);const zt=zKron+0.075;for(let k=0;k<4;k++){const y=-0.24+k*0.16;push(LINE(P([-0.34,y,zt]),P([0.34,y,zt]),accent,1.0,0.75));}})();
+    if(labels)push(tx([0.55,0,zKron+0.04],16,3,'KRONOS · deploy',10,'var(--edge)'));
+    // GAIA layer (optimize)
+    (function(){box3W(-0.55,0.55,-0.42,0.42,zGaia,0.07,[34,37,47]);const zt=zGaia+0.075;const c=P([0,0,zt]);ring([0,0,zt],26,accent,0.8);for(let a=0;a<8;a++){const t=a/8*6.283;push(`<circle cx="${f(c[0]+Math.cos(t)*17)}" cy="${f(c[1]+Math.sin(t)*17*0.6)}" r="2" fill="${accent}"/>`);}})();
+    if(labels)push(tx([0.55,0,zGaia+0.04],16,3,'GAIA · optimize',10,'var(--edge)'));
+    // NEAR: inputs plane (PyTorch model + same-pipeline change triggers)
+    planeXY(zIn,1.0,0.62,true); densCloud([0,0,zIn+0.04],54,112); node([0,0,zIn],4.5,accent,1);
+    lbl([0,0,zIn],-120,-8,'PYTORCH','MODEL');
+    if(labels){for(let i=0;i<TR.length;i++)push(tx([0.62,0,zIn],120,-6+i*13,TR[i],8,'var(--muted)'));push(tx([0.62,0,zIn],120,-20,'SAME PIPELINE:',8.5,'var(--edge)'));}
+    caption('THE FULL PIPELINE — TRAIN → OPTIMIZE → DEPLOY → RUN','SAME PIPELINE EVERY TIME — UPDATE MODEL · NEW CHIP · NEW HARDWARE GEN');
+  };
+  S.proof=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(340,520,48);
+      for(let i=0;i<3;i++){const gy=i*1.35;R.conn([1.5,gy+0.5,0.4],[3.2,1.4,0.5]);R.box(0,gy,0,1.35,1.0,0.4,C_SAGE,'#3a4a3a','model');}
+      R.label(0.7,4.2,0,'MODELS','customers');
+      R.box(3.2,0.4,0,1.6,1.9,0.5,accent,'#26306e'); R.label(4.0,2.5,0,'yasp','verify · torch.allclose');
+      const N=4;for(let i=0;i<N;i++){const gy=-0.7+i*1.35;R.conn([4.8,1.4,0.5],[6.1,gy+0.5,0.2]);R.die(6.1,gy,0,0.95,true);}
+      R.label(6.65,-0.7+4*1.35,0,'REAL SILICON','verified',0,12);
+      caption('PROVEN ON REAL SILICON','EVERY DEPLOYMENT VERIFIED · CORRECTNESS PRESERVED');
+      return;
+    }
+    if(variant==='B'){ // HORIZONTAL PROOF LANES: each customer model -> yasp verify bar -> verified silicon
+      const rows=4; const lanes=[];
+      for(let i=0;i<rows;i++){const sv=(i-(rows-1)/2)/((rows-1)/2);lanes.push({m:[-1.5,0,sv*0.55],t:[1.5,0,sv*0.55],z:sv*0.55});}
+      fit([[-1.7,0,0.7],[1.7,0,-0.7],[0,0.4,0],[0,-0.4,0]],120);
+      // central yasp verify layer (vertical gradient bar spanning the lanes)
+      ribbon([0,0,0.85],[0,0,-0.85],[0,0.32,0],0.62,20);
+      for(const L of lanes){glowRoute(L.m,[0,0,L.z],1.15);glowRoute([0,0,L.z],L.t,1.15);densCloud(L.m,15,26);dieRich(L.t,0.12,0.045);verifyMark([L.t[0],0,L.t[2]],20);}
+      lbl([0,0,0.9],-14,0,'yasp','VERIFIED');
+      if(labels){push(tx(lanes[0].m,-18,-24,'MODELS',10.5,'var(--muted)'));push(tx(lanes[0].t,26,-2,'REAL SILICON',10.5,'var(--muted)'));}
+      caption('PROVEN ON REAL SILICON','EVERY DEPLOYMENT VERIFIED · CORRECTNESS PRESERVED — TORC · IBM · AZURE AND MORE');
+      return;
+    }
+    // VARIANT A — DESCENDING: customer models -> yasp verify layer -> verified silicon (far->near)
+    const zModel=1.35, zVer=0.15, zSil=-1.4;
+    fit([[-1.15,0,zModel+0.4],[1.15,0,zSil-0.4],[0,0.9,0],[0,-0.9,0]],110);
+    // throughline
+    glowRoute([0,0,zModel],[0,0,zVer+0.14]); glowRoute([0,0,zVer-0.14],[0,0,zSil+0.2]);
+    // FAR: silicon plane + verified dies
+    planeXY(zSil,1.05,0.6,true);
+    const N=4;for(let i=0;i<N;i++){const sx=(i-(N-1)/2)/((N-1)/2);const t=[sx*0.72,0,zSil+0.02];glowRoute([0,0,zVer-0.1],t,1.05);dieRich(t,0.14,0.05);verifyMark([t[0],0,t[2]],22);}
+    lbl([0,0,zSil],-150,0,'REAL SILICON','VERIFIED');
+    // yasp verify layer (gradient slab with check motif)
+    (function(){box3W(-0.55,0.55,-0.42,0.42,zVer,0.06,[26,28,36]);gradSlabXY(zVer+0.065,0.5,0.38);})();
+    verifyMark([0,0,zVer+0.14],16);
+    lbl([0,0,zVer],66,-4,'yasp','torch.allclose · VERIFIED');
+    // NEAR: models plane (several customer clouds)
+    planeXY(zModel,1.0,0.62,true);
+    for(const sx of [-0.5,-0.17,0.17,0.5])densCloud([sx*1.2,0,zModel+0.04],20,34);
+    node([0,0,zModel],4.5,accent,1);
+    lbl([0,0,zModel],-120,-8,'MODELS','CUSTOMERS');
+    caption('PROVEN ON REAL SILICON','EVERY DEPLOYMENT VERIFIED · CORRECTNESS PRESERVED — TORC · IBM · AZURE AND MORE');
+  };
+  // ---- MATRIX (original Gap->Matrix) kept as a scene ----
+  S.matrix=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(340,520,46);
+      const Mc=4,Nc=4;
+      for(let i=0;i<Mc;i++){const gy=i*1.15;R.conn([1.1,gy+0.4,0.3],[3.3,1.7,0.4],false);R.box(0,gy,0,1.0,0.8,0.34,C_SAGE,'#3a4a3a');}
+      R.box(3.3,0.3,0,1.2,2.6,0.4,accent,'#26306e','pipe'); R.label(3.9,3.2,0,'yasp','the layer');
+      for(let j=0;j<Nc;j++){const gy=j*1.15;R.conn([4.5,1.7,0.4],[5.7,gy+0.4,0.2]);R.die(5.7,gy,0,0.85,false);}
+      caption('M × N → M + N','THE GAP, CLOSED BY THE INDEPENDENT LAYER');
+      return;
+    }
+    const M=opts.M||6,N=opts.N||5;const FS=1.05,SS=0.86,DS=0.10;
+    const Mpos=[],Tpos=[];for(let i=0;i<M;i++){const s=M<2?0:(i-(M-1)/2)/((M-1)/2);Mpos.push({s,w:[-FS,(rand()-0.5)*DS,s*SS]});}
+    for(let j=0;j<N;j++){const s=N<2?0:(j-(N-1)/2)/((N-1)/2);Tpos.push({s,w:[FS,(rand()-0.5)*DS,s*SS]});}
+    fit([[-1.25,0,1.05],[1.25,0,-1.05],[-1.25,0,-1.05],[1.25,0,1.05]]);
+    for(const m of Mpos)for(const t of Tpos)seg(m.w,t.w,'var(--mesh)',0.5,0.12);
+    ribbon([0,0,0.98],[0,0,-0.98],[0,DS*1.6,0],0.7,22);
+    for(const m of Mpos)route(m.w,[0,0,clamp(m.s,-0.9,0.9)*SS],accent,1.2,0.9);
+    for(const t of Tpos)route([0,0,clamp(t.s,-0.9,0.9)*SS],t.w,accent,1.2,0.9);
+    for(const m of Mpos)cloud(m.w,14,12);
+    for(const t of Tpos)die(t.w,8,rand()*40,false);
+    caption('M × N → M + N','THE GAP, CLOSED BY THE INDEPENDENT LAYER');
+  };
+
+  // ================= BENEFIT DIAGRAMS =================
+  const GREY=[46,48,56], YBLU=[44,48,210], SLAB=[34,37,92], COP=[120,80,40];
+  function certBadge(w,dx,dy,label){const c=P(w);const x=c[0]+dx,y=c[1]+dy;push(`<circle cx="${f(x)}" cy="${f(y)}" r="9" fill="none" stroke="${accent}" stroke-width="${f(1.3*lw)}"/><path d="M${f(x-4)},${f(y)} l3,3.5 l6,-8" fill="none" stroke="${accent}" stroke-width="${f(1.6*lw)}" stroke-linecap="round" stroke-linejoin="round"/><text x="${f(x+15)}" y="${f(y+4)}" font-family="var(--mono)" font-size="${f(9.5*ts)}" letter-spacing="0.1em" fill="var(--edge)">${label}</text>`);}
+
+  // ---- MONTHS -> HOURS: time compression ----
+  S.months=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(360,520,50);
+      for(let i=0;i<8;i++)R.box(0,0,i*0.15,1.6,1.6,0.12,C_COPPER,'#4a3822');
+      R.label(0.8,1.7,8*0.15,'MONTHS','manual per-target');
+      R.conn([1.6,0.8,0.7],[3.4,0.8,0.2]);
+      R.box(3.4,0.2,0,1.6,1.6,0.16,accent,'#26306e'); R.label(4.2,1.9,0,'HOURS','automated');
+      caption('MONTHS → HOURS','yasp REMOVES THE ENGINEERING BOTTLENECK — PER-TARGET OPTIMIZATION, AUTOMATED');return;}
+    if(variant==='B'){fit([[-1.7,0,0.4],[1.7,0,-0.3],[0,0.4,0],[0,-0.4,0]]);
+      const x0=-1.6,x1=0.85,segN=12;box3W(x0,x1,-0.12,0.12,0,0.05,GREY);
+      for(let i=1;i<segN;i++){const x=x0+(x1-x0)*i/segN;seg([x,-0.12,0.055],[x,0.12,0.055],'var(--edge)',0.6,0.4);}
+      box3W(1.1,1.42,-0.12,0.12,0,0.07,YBLU);
+      glowRoute([0.85,0,0.05],[1.1,0,0.05],1.3);
+      lbl([-0.4,0,0.06],-20,-34,'MONTHS','MANUAL · PER-TARGET'); lbl([1.26,0,0.07],-10,-34,'HOURS','yasp');
+      caption('MONTHS → HOURS','yasp REMOVES THE ENGINEERING BOTTLENECK — PER-TARGET OPTIMIZATION, AUTOMATED');return;}
+    // A — tall stack (months) collapsing to short (hours)
+    fit([[-1.35,0,1.25],[1.35,0,-1.15],[0,0.55,0],[0,-0.55,0]]);
+    const nM=10;for(let i=0;i<nM;i++){const z=-0.95+i*0.2;box3W(-1.25,-0.5,-0.28,0.28,z,0.06,GREY);}
+    box3W(0.5,1.25,-0.28,0.28,-0.95,0.09,YBLU);box3W(0.5,1.25,-0.28,0.28,-0.74,0.09,YBLU);
+    glowRoute([-0.5,0,0.25],[0.5,0,-0.6],1.4);
+    lbl([-0.87,0,1.15],-24,-6,'MONTHS','MANUAL · PER-TARGET'); lbl([0.87,0,-0.5],-10,-42,'HOURS','AUTOMATED');
+    caption('MONTHS → HOURS','yasp REMOVES THE ENGINEERING BOTTLENECK — PER-TARGET OPTIMIZATION, AUTOMATED');
+  };
+
+  // ---- CUT COSTS: 30-67% lower ----
+  S.cost=()=>{
+    const variant=opts.variant||'A';
+    const W3=[['CONVOLUTIONAL',0.52,0.38,'26%'],['LLM ATTENTION',0.58,0.47,'18%'],['TRANSFORMER',0.66,0.22,'67%']];
+    if(variant==='C'){const R=isoRig(320,540,46);
+      for(let i=0;i<3;i++){const gy=i*1.7;R.box(0,gy,0,1.0,1.0,W3[i][1]*1.4,GREY==GREY?'#3a3d47':'#3a3d47');R.box(1.4,gy,0,1.0,1.0,W3[i][2]*1.4,accent,'#26306e');
+        R.label(2.9,gy+0.5,0,'−'+W3[i][3],W3[i][0].split(' ')[0]);}
+      caption('CUT COSTS · 30–67% LOWER','UNLOCK CHEAPER HARDWARE WITHOUT RE-ENGINEERING — $ / 1M INFERENCES');return;}
+    if(variant==='B'){fit([[-1.5,0,0.7],[1.7,0,-0.7],[0,0.3,0],[0,-0.3,0]]);
+      for(let i=0;i<3;i++){const y=(i-1)*0.5;const [lab,std,ya,pc]=W3[i];
+        box3W(-1.2,-1.2+std*2.2,y-0.07,y-0.005,0,0.04,GREY);
+        box3W(-1.2,-1.2+ya*2.2,y+0.02,y+0.085,0,0.06,YBLU);
+        push(tx([-1.2+std*2.2,y-0.03,0.05],16,2,'−'+pc,11,accent));
+        push(tx([-1.2,y,0.05],0,-24,lab,8.5,'var(--muted)'));}
+      caption('CUT COSTS · 30–67% LOWER','UNLOCK CHEAPER HARDWARE WITHOUT RE-ENGINEERING — $ / 1M INFERENCES');return;}
+    // A — paired 3D columns per workload
+    fit([[-1.45,0,0.9],[1.45,0,-0.5],[0,0.5,0],[0,-0.5,0]]);
+    for(let i=0;i<3;i++){const cx=-0.95+i*0.95;const [lab,std,ya,pc]=W3[i];
+      box3W(cx-0.22,cx-0.02,-0.16,0.16,-0.45,std,GREY);
+      box3W(cx+0.02,cx+0.22,-0.16,0.16,-0.45,ya,YBLU);
+      push(tx([cx,0,-0.45+std+0.06],-16,-4,'−'+pc,12,accent));
+      push(tx([cx,0,-0.45],-46,46,lab,8,'var(--muted)'));}
+    caption('CUT COSTS · 30–67% LOWER','UNLOCK CHEAPER HARDWARE WITHOUT RE-ENGINEERING — $ / 1M INFERENCES');
+  };
+
+  // ---- NO LOCK-IN: one pipeline, any vendor ----
+  S.nolockin=()=>{
+    const variant=opts.variant||'A';
+    const T4=[['NVIDIA',-0.95],['AMD',-0.32],['AWS',0.32],['EDGE',0.95]];
+    if(variant==='C'){const R=isoRig(330,520,48);
+      R.box(2.4,0.2,0,1.6,1.6,0.5,accent,'#26306e','pipe'); R.label(3.2,1.9,0,'ONE PIPELINE','any vendor');
+      const NM=['NVIDIA','AMD','AWS','EDGE'];for(let i=0;i<4;i++){const gy=-0.9+i*1.4;R.conn([4.0,1.0,0.55],[5.2,gy+0.5,0.2]);R.die(5.2,gy,0,0.95,false);R.label(5.65,gy+1.1,0,NM[i],'');}
+      caption('NO LOCK-IN','SWITCH VENDORS WITHOUT REWRITES — NVIDIA · AMD · AWS · EDGE, ONE PIPELINE');return;}
+    if(variant==='B'){fit([[-1.7,0,0.7],[1.7,0,-0.7],[0,0.5,0],[0,-0.5,0]]);
+      densCloud([-1.5,0,0.05],36,70);box3W(-0.9,-0.3,-0.28,0.28,0,0.12,SLAB);push(tx([-0.6,0,0.13],-30,4,'ONE PIPELINE',9,'var(--edge)'));
+      for(let i=0;i<4;i++){const sv=(i-1.5)*0.42;const t=[1.5,0,sv*0.9];glowRoute([-0.3,0,0.05],t,1.1);dieRich(t,0.12,0.045);push(tx(t,24,2,T4[i][0],9,'var(--edge)'));}
+      caption('NO LOCK-IN','SWITCH VENDORS WITHOUT REWRITES — NVIDIA · AMD · AWS · EDGE, ONE PIPELINE');return;}
+    // A — one pipeline fans to 4 targets, no walls; switch motif
+    fit([[-1.25,0,1.15],[1.4,0,-1.15],[0,0.7,0],[0,-0.7,0]]);
+    densCloud([0,0,1.05],40,80);node([0,0,1.05],5,accent,1);
+    box3W(-0.4,0.4,-0.28,0.28,0.25,0.12,SLAB);push(tx([0,0,0.37],-34,4,'ONE PIPELINE',9,'var(--edge)'));
+    for(const [lab,sx] of T4){const t=[sx,0,-0.98];glowRoute([0,0,0.25],t,1.1);dieRich(t,0.15,0.05);push(tx(t,-14,34,lab,9,'var(--edge)'));}
+    // switch swap arrows between first two dies
+    push(`<path d="M${f(P([-0.95,0,-0.7])[0])},${f(P([-0.95,0,-0.7])[1])} C${f(P([-0.6,0.3,-0.7])[0])},${f(P([-0.6,0.3,-0.7])[1])} ${f(P([-0.6,0.3,-0.7])[0])},${f(P([-0.32,0,-0.7])[1])} ${f(P([-0.32,0,-0.7])[0])},${f(P([-0.32,0,-0.7])[1])}" fill="none" stroke="${accent}" stroke-width="${f(1*lw)}" stroke-opacity="0.6" stroke-dasharray="4 4"/>`);
+    lbl([0,0,1.05],-30,-30,'ONE PIPELINE','ANY VENDOR');
+    caption('NO LOCK-IN','SWITCH VENDORS WITHOUT REWRITES — NVIDIA · AMD · AWS · EDGE, ONE PIPELINE');
+  };
+
+  // ---- FREE YOUR ENGINEERS: agents deploy, team builds models ----
+  S.freeeng=()=>{
+    const variant=opts.variant||'A';
+    if(variant==='C'){const R=isoRig(320,540,48);
+      for(let i=0;i<4;i++){const gy=i*0.9;R.box(0,gy,0,0.7,0.7,0.3,C_SAGE,'#3a4a3a');R.conn([0.7,gy+0.35,0.3],[2.2,1.7,0.6]);}
+      R.box(2.2,1.2,0,1.2,1.2,0.5,accent,'#26306e','model'); R.label(2.8,2.6,0,'BETTER MODELS','your team');
+      R.box(4.0,0.2,-0.5,1.4,2.4,0.28,'#2b2e38','#1c1f26','pipe'); R.label(4.7,2.9,-0.5,'yasp AGENTS','handle targets');
+      for(let j=0;j<4;j++){const gy=j*0.62;R.conn([5.4,1.4,0.4],[6.4,gy+0.3,0.2]);R.die(6.4,gy,0,0.7,false);}
+      caption('FREE YOUR ENGINEERS','NO KERNEL ENGINEERS PER TARGET — AGENTS DEPLOY, YOUR TEAM BUILDS MODELS');return;}
+    if(variant==='B'){fit([[-1.7,0,0.8],[1.7,0,-0.8],[0,0.6,0],[0,-0.6,0]]);
+      const eng=[-1.4,-1.15,-0.9];for(const ex of eng)node([ex,0,0.5],4,'var(--edge)',0.9);
+      densCloud([-1.1,0,1.0],30,55);push(tx([-1.1,0,1.0],-30,-24,'BETTER MODELS',9,accent));
+      for(const ex of eng)route([ex,0,0.5],[-1.1,0,0.9],accent,0.9,0.7);
+      box3W(-0.45,0.35,-0.3,0.3,0,0.12,SLAB);push(tx([-0.05,0,0.13],-30,4,'yasp AGENTS',9,'var(--edge)'));
+      for(let i=0;i<4;i++){const sv=(i-1.5)*0.42;const t=[1.45,0,sv*0.85];glowRoute([0.35,0,0.05],t,1.0);dieRich(t,0.11,0.04);}
+      push(tx([1.45,0,1.0],-10,0,'TARGETS · HANDLED',9,'var(--muted)'));
+      caption('FREE YOUR ENGINEERS','NO KERNEL ENGINEERS PER TARGET — AGENTS DEPLOY, YOUR TEAM BUILDS MODELS');return;}
+    // A — engineers freed up to models; agent layer handles targets
+    fit([[-1.3,0,1.3],[1.3,0,-1.1],[0,0.7,0],[0,-0.7,0]]);
+    const eng=[-0.6,-0.2,0.2,0.6];for(const ex of eng)node([ex,0,0.85],4.5,'var(--edge)',0.9);
+    densCloud([0,0,1.35],36,68);push(tx([0,0,1.35],-42,-34,'BETTER MODELS',10,accent));
+    for(const ex of eng)route([ex,0,0.85],[0,0,1.28],accent,0.9,0.7);
+    push(tx([0,0,0.85],-150,4,'YOUR ENGINEERS →',9,'var(--muted)'));
+    box3W(-0.72,0.72,-0.28,0.28,0.05,0.12,SLAB);push(tx([0,0,0.17],-34,4,'yasp AGENTS',9,'var(--edge)'));
+    const T=[-0.72,-0.24,0.24,0.72];for(const sx of T){const t=[sx,0,-0.9];glowRoute([0,0,0.05],t,1.0);dieRich(t,0.13,0.045);}
+    push(tx([0,0,-0.92],-40,44,'ALL TARGETS · HANDLED BY AGENTS',9,'var(--muted)'));
+    caption('FREE YOUR ENGINEERS','NO KERNEL ENGINEERS PER TARGET — AGENTS DEPLOY, YOUR TEAM BUILDS MODELS');
+  };
+
+  // ---- AUDITABLE & DETERMINISTIC ----
+  S.auditable=()=>{
+    const variant=opts.variant||'A';
+    const certs=['ISO 26262','DO-178C','IEC 62304'];
+    if(variant==='C'){const R=isoRig(320,520,46);
+      R.box(0,0,0,1.8,1.8,0.4,'#2b2e38','#1c1f26'); R.label(0.9,2.0,0.4,'READABLE SOURCE','CUDA / PTX');
+      R.conn([1.8,0.9,0.5],[3.0,0.9,0.4]);
+      for(let i=0;i<3;i++){const gy=i*1.1;R.conn([3.6,1.4,0.4],[4.6,gy+0.35,0.2]);R.die(4.6,gy,0,0.8,true);}
+      R.label(5.2,3.4,0,'SAME OUT','every time');
+      caption('AUDITABLE · DETERMINISTIC','READABLE SOURCE · SAME INPUT = SAME OUTPUT · ISO 26262 · DO-178C · IEC 62304');return;}
+    if(variant==='B'){fit([[-1.7,0,0.7],[1.7,0,-0.7],[0,0.5,0],[0,-0.5,0]]);
+      // source pages left
+      box3W(-1.5,-0.9,-0.3,0.3,0,0.02,[40,42,50]);for(let i=0;i<7;i++){const y=-0.22+i*0.07;seg([-1.45,y,0.03],[-1.45+(0.18+0.32*((i*7)%3)/2),y,0.03],'var(--mesh)',0.7,0.55);}
+      push(tx([-1.2,0,0.05],-20,-26,'READABLE SOURCE',9,'var(--edge)'));
+      node([-0.4,0,0.05],5,accent,1);push(tx([-0.4,0,0.05],-24,-16,'SAME INPUT',8.5,'var(--muted)'));
+      for(let i=0;i<3;i++){const sv=(i-1)*0.5;const t=[1.1,0,sv*0.8];glowRoute([-0.4,0,0.05],t,1.0);dieRich(t,0.12,0.045);}
+      push(tx([1.1,0,0.95],-16,0,'IDENTICAL OUTPUT',9,'var(--muted)'));
+      for(let i=0;i<3;i++)certBadge([1.55,0,0.4-i*0.35],0,0,certs[i]);
+      caption('AUDITABLE · DETERMINISTIC','READABLE SOURCE · SAME INPUT = SAME OUTPUT · ISO 26262 · DO-178C · IEC 62304');return;}
+    // A — source plane on top, deterministic identical outputs, cert badges
+    fit([[-1.3,0,1.15],[1.35,0,-1.0],[0,0.65,0],[0,-0.65,0]]);
+    planeXY(0.95,0.72,0.42,true);
+    for(let i=0;i<8;i++){const y=-0.32+i*0.09;const w=0.25+0.55*((i*7)%3)/2;seg([-0.6,y,0.97],[-0.6+w*1.6,y,0.97],'var(--mesh)',0.7,0.5);}
+    push(tx([0,0,0.95],-40,-38,'READABLE SOURCE — CUDA/PTX',10,'var(--edge)'));
+    node([0,0,0.32],5,accent,1);push(tx([0,0,0.32],-58,2,'SAME INPUT',9,'var(--edge)'));
+    const outs=[-0.62,0,0.62];for(const sx of outs){const t=[sx,0,-0.72];glowRoute([0,0,0.32],t,1.0);dieRich(t,0.14,0.045);}
+    push(tx([0,0,-0.9],-40,46,'SAME OUTPUT — EVERY TIME',9,'var(--muted)'));
+    for(let i=0;i<3;i++)certBadge([1.05,0,0.55-i*0.32],0,0,certs[i]);
+    caption('AUDITABLE · DETERMINISTIC','READABLE SOURCE · SAME INPUT = SAME OUTPUT · ISO 26262 · DO-178C · IEC 62304');
+  };
+
+  (S[scene]||S.platformless)();
+  return `<svg id="art" viewBox="0 0 ${LW} ${Ht}" xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`;
+}
+this.MX={build,SCENE_LIST,SCENE_NAME};
+</script>
+<script>
+const $=id=>document.getElementById(id),stage=$('stage');
+const SCAM={platformless:[28,16],fragmentation:[24,15],kronos:[26,14],gaia:[26,36],together:[28,16],pipeline:[28,16],proof:[28,20],matrix:[28,15],months:[28,16],cost:[28,16],nolockin:[28,16],freeeng:[28,16],auditable:[28,16]};
+function render(){stage.innerHTML=MX.build({scene:$('scene').value,variant:$('variant').value,seed:parseInt($('seed').value,10)||0,accent:$('accent').value,M:parseInt($('m').value,10),N:parseInt($('nn').value,10),az:parseInt($('az').value,10),el:parseInt($('el').value,10),lineWeight:parseFloat($('lw').value),textScale:parseFloat($('ts').value),labels:$('labels').checked});}
+$('scene').addEventListener('change',()=>{const c=SCAM[$('scene').value]||[28,16];$('az').value=c[0];$('el').value=c[1];render();});
+$('rnd').onclick=()=>{$('seed').value=Math.floor(Math.random()*99999);render();};
+['scene','variant','seed','accent','m','nn','az','el','lw','ts','labels'].forEach(id=>{$(id).addEventListener('input',render);$(id).addEventListener('change',render);});
+function resolvedSVG(){const src=$('art');if(!src)return'';const clone=src.cloneNode(true),cs=getComputedStyle(document.documentElement);const map={'--bg':'','--edge':'','--mesh':'','--dot':'','--muted':'','--mono':''};for(const k in map)map[k]=cs.getPropertyValue(k).trim()||'monospace';map['--mono']=(map['--mono']||'monospace').split('"').join('');let s=new XMLSerializer().serializeToString(clone);for(const k in map)s=s.split('var('+k+')').join(map[k]);return s;}
+function dl(n,b){try{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),800);}catch(e){}}
+const fn=()=>'yasp-'+$('scene').value+'-'+$('seed').value;
+$('svg').onclick=()=>dl(fn()+'.svg',new Blob([resolvedSVG()],{type:'image/svg+xml'}));
+$('png').onclick=()=>{const svg=resolvedSVG(),sc=2,img=new Image(),url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));img.onload=()=>{const vb=($('art').getAttribute('viewBox')||'0 0 1320 1180').split(' ');const VW=parseFloat(vb[2]),VH=parseFloat(vb[3]);const c=document.createElement('canvas');c.width=VW*sc;c.height=VH*sc;const x=c.getContext('2d');x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0B0C0E';x.fillRect(0,0,c.width,c.height);x.scale(sc,sc);x.drawImage(img,0,0,VW,VH);URL.revokeObjectURL(url);c.toBlob(b=>dl(fn()+'.png',b),'image/png');};img.src=url;};
+function copySVG(){const s=resolvedSVG();if(!s)return;let w=document.getElementById('__cw');if(!w){w=document.createElement('div');w.id='__cw';w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px;font-family:monospace';const box=document.createElement('div');box.style.cssText='background:#0c0d10;border:1px solid #2A2C31;padding:14px;width:min(760px,92vw);display:flex;flex-direction:column;gap:10px';const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;color:#CFCEC6;font-size:12px;letter-spacing:.08em';const t=document.createElement('span');t.textContent='SVG';const msg=document.createElement('span');msg.id='__cmsg';msg.style.cssText='flex:1;color:#7C7B72';const bc=document.createElement('button');bc.textContent='COPY';bc.style.cssText='font-family:monospace;font-size:11px;letter-spacing:.1em;background:#2C30E6;color:#fff;border:none;padding:7px 12px;cursor:pointer';const bx=document.createElement('button');bx.textContent='CLOSE';bx.style.cssText='font-family:monospace;font-size:11px;letter-spacing:.1em;background:transparent;color:#CFCEC6;border:1px solid #2A2C31;padding:7px 12px;cursor:pointer';const ta=document.createElement('textarea');ta.id='__cta';ta.readOnly=true;ta.style.cssText='width:100%;height:54vh;background:#08090b;color:#CFCEC6;border:1px solid #2A2C31;font-family:monospace;font-size:11px;padding:10px;resize:none';row.appendChild(t);row.appendChild(msg);row.appendChild(bc);row.appendChild(bx);box.appendChild(row);box.appendChild(ta);w.appendChild(box);document.body.appendChild(w);const tryCopy=()=>{ta.focus();ta.select();try{ta.setSelectionRange(0,ta.value.length);}catch(_){}let ok=false;try{ok=document.execCommand('copy');}catch(_){}if(ok){msg.textContent='Copied to clipboard';return;}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(ta.value).then(()=>msg.textContent='Copied to clipboard').catch(()=>msg.textContent='Text selected — press Cmd/Ctrl-C');}else{msg.textContent='Text selected — press Cmd/Ctrl-C';}};bc.onclick=tryCopy;bx.onclick=()=>w.style.display='none';w.addEventListener('click',e=>{if(e.target===w)w.style.display='none';});w.__try=tryCopy;}const ta=document.getElementById('__cta');ta.value=s;w.style.display='flex';document.getElementById('__cmsg').textContent='Text selected — press Cmd/Ctrl-C';w.__try();}
+stage.addEventListener('click',copySVG);
+render();
+</script></body></html>

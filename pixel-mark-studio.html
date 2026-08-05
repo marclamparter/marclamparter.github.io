@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Mark Studio</title>
+<style>
+  :root{
+    --bg:#0A0B0D;
+    --panel:#121316;
+    --panel-2:#16181B;
+    --line:#26282C;
+    --line-soft:#1C1E21;
+    --cream:#F0E8D8;
+    --muted:#6B6E73;
+    --muted-2:#92959A;
+    --amber:#E0B341;
+    --mark:#F0E8D8;
+    --r:2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--cream);
+    font-family:"Aeonik","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;}
+
+  /* ---------- Header ---------- */
+  header{
+    padding:28px 28px 20px;
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;
+  }
+  .dna{
+    width:60px;height:60px;flex:0 0 auto;
+    border:1px solid var(--line);background:var(--panel);
+    display:flex;align-items:center;justify-content:center;border-radius:var(--r);
+  }
+  .dna svg{width:34px;height:34px;}
+  .dna svg path{fill:var(--cream);}
+  .title-block h1{
+    font-size:19px;font-weight:600;margin:0 0 4px;letter-spacing:-0.01em;
+  }
+  .title-block p{
+    margin:0;color:var(--muted-2);font-size:12.5px;line-height:1.45;max-width:46ch;
+  }
+  .title-block .kbd{color:var(--cream);}
+
+  /* ---------- Control bar ---------- */
+  .controls{
+    position:sticky;top:0;z-index:30;
+    background:rgba(10,11,13,0.92);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+    padding:14px 28px;
+    display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap;
+  }
+  .ctrl{display:flex;flex-direction:column;gap:7px;}
+  .ctrl label{
+    font-size:10px;letter-spacing:0.13em;text-transform:uppercase;color:var(--muted);
+  }
+  .ctrl .val{color:var(--cream);}
+  select,button,input[type=text]{
+    font:inherit;color:var(--cream);background:var(--panel-2);
+    border:1px solid var(--line);border-radius:var(--r);
+  }
+  select{height:34px;padding:0 28px 0 10px;font-size:13px;cursor:pointer;
+    appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2392959A' stroke-width='1.3' fill='none'/></svg>");
+    background-repeat:no-repeat;background-position:right 10px center;min-width:160px;}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:150px;height:34px;background:transparent;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line);}
+  input[type=range]::-moz-range-track{height:2px;background:var(--line);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--cream);border-radius:50%;margin-top:-5px;}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;background:var(--cream);border:none;border-radius:50%;}
+  .seed-row{display:flex;gap:6px;align-items:center;}
+  input[type=text].seed{height:34px;padding:0 10px;font-size:13px;width:120px;}
+  button{
+    height:34px;padding:0 14px;font-size:12.5px;cursor:pointer;
+    letter-spacing:0.01em;transition:border-color .15s,background .15s,color .15s;
+  }
+  button:hover{border-color:var(--muted);}
+  button.primary{background:var(--cream);color:#0A0B0D;border-color:var(--cream);font-weight:600;}
+  button.primary:hover{background:#fff;}
+  button.ghost{background:transparent;}
+  .toggle{display:flex;align-items:center;gap:8px;height:34px;cursor:pointer;user-select:none;font-size:12.5px;color:var(--muted-2);}
+  .toggle .box{width:30px;height:16px;border:1px solid var(--line);border-radius:9px;position:relative;background:var(--panel-2);transition:background .15s;}
+  .toggle .box::after{content:"";position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s;}
+  .toggle.on .box{background:#2A2B1A;border-color:var(--amber);}
+  .toggle.on .box::after{transform:translateX(14px);background:var(--amber);}
+  .toggle.on{color:var(--cream);}
+
+  /* ---------- Pinned ---------- */
+  .pinned-wrap{padding:18px 28px 0;}
+  .section-label{
+    font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);
+    margin-bottom:12px;display:flex;align-items:center;gap:10px;
+  }
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line-soft);}
+  .pinned-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .empty-note{color:var(--muted);font-size:12px;}
+
+  /* ---------- Gallery ---------- */
+  .gallery{
+    padding:18px 28px 80px;
+    display:grid;gap:10px;
+    grid-template-columns:repeat(auto-fill,minmax(94px,1fr));
+  }
+  .tile{
+    position:relative;aspect-ratio:1;background:var(--panel);
+    border:1px solid var(--line-soft);border-radius:var(--r);
+    cursor:pointer;padding:0;overflow:hidden;
+    transition:border-color .15s,transform .12s;
+  }
+  .tile:hover{border-color:var(--muted);transform:translateY(-2px);}
+  .tile:focus-visible{outline:2px solid var(--cream);outline-offset:2px;}
+  .tile svg{width:100%;height:100%;display:block;padding:18%;}
+  .tile .idx{
+    position:absolute;top:5px;left:7px;font-size:9px;color:var(--muted);
+    opacity:0;transition:opacity .15s;
+  }
+  .tile:hover .idx{opacity:1;}
+  .tile .star{
+    position:absolute;top:4px;right:5px;width:16px;height:16px;opacity:0;
+    transition:opacity .15s;color:var(--muted);
+  }
+  .tile:hover .star{opacity:.8;}
+  .tile.pinned .star{opacity:1;color:var(--amber);}
+  .tile .star svg{width:100%;height:100%;padding:0;}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(6,7,8,0.82);backdrop-filter:blur(4px);
+    z-index:60;display:none;align-items:center;justify-content:center;padding:24px;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    width:min(640px,100%);max-height:90vh;overflow:auto;
+    display:grid;grid-template-columns:300px 1fr;
+  }
+  .modal .preview{
+    background:var(--bg);border-right:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;padding:40px;
+  }
+  .modal .preview svg{width:100%;height:auto;max-width:200px;}
+  .modal .meta{padding:24px;display:flex;flex-direction:column;gap:18px;}
+  .modal .meta h3{margin:0;font-size:15px;font-weight:600;}
+  .params{font-size:12px;line-height:1.9;color:var(--muted-2);}
+  .params b{color:var(--cream);font-weight:500;}
+  .modal .actions{display:flex;flex-direction:column;gap:8px;margin-top:auto;}
+  .modal .actions .row{display:flex;gap:8px;}
+  .modal .actions button{flex:1;}
+  .close-x{position:absolute;top:18px;right:22px;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;height:auto;padding:0;z-index:2;}
+  .close-x:hover{color:var(--cream);}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--cream);color:#0A0B0D;font-size:12.5px;font-weight:600;
+    padding:9px 18px;border-radius:var(--r);opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;z-index:90;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:560px){
+    .modal{grid-template-columns:1fr;}
+    .modal .preview{border-right:none;border-bottom:1px solid var(--line);}
+    header,.controls,.gallery,.pinned-wrap{padding-left:16px;padding-right:16px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dna" title="yasp mark — the family this tool riffs on">
+    <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <path d="M24 38H0V46H24V38Z"/>
+      <path d="M24 70H48V78H24V70Z" transform="translate(0,-30)"/>
+      <path d="M48 30H24V38H48V30Z"/>
+      <path d="M0 62H24V70H0V62Z" transform="translate(0,-30)"/>
+      <path d="M36 54L24 54L24 46L36 46L36 54Z"/>
+      <path d="M48 62L36 62L36 54L48 54L48 62Z"/>
+    </svg>
+  </div>
+  <div class="title-block">
+    <h1>Pixel Mark Studio</h1>
+    <p>One hundred logo marks in the yasp pixel family. Set the rules, browse the sheet, pin what works, export clean SVG or PNG. Same <span class="kbd mono">seed</span> + rules always rebuild the same marks.</p>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="ctrl">
+    <label for="engine">Engine</label>
+    <select id="engine">
+      <option value="mix">Mixed</option>
+      <option value="mirror-v">Mirror · vertical</option>
+      <option value="quad">Quad symmetry</option>
+      <option value="rotate">Rotational</option>
+      <option value="diagonal">Diagonal</option>
+      <option value="mirror-h">Mirror · horizontal</option>
+      <option value="free">Free · connected</option>
+    </select>
+  </div>
+  <div class="ctrl">
+    <label for="grid">Grid · <span class="val mono" id="gridVal">6×6</span></label>
+    <input type="range" id="grid" min="4" max="9" value="6" step="1">
+  </div>
+  <div class="ctrl">
+    <label for="density">Density · <span class="val mono" id="densityVal">48%</span></label>
+    <input type="range" id="density" min="20" max="75" value="48" step="1">
+  </div>
+  <div class="ctrl">
+    <label for="gap">Block gap · <span class="val mono" id="gapVal">0</span></label>
+    <input type="range" id="gap" min="0" max="30" value="0" step="2">
+  </div>
+  <div class="ctrl">
+    <label>De-speckle</label>
+    <div class="toggle on" id="cleanToggle"><span class="box"></span><span>Tidy single cells</span></div>
+  </div>
+  <div class="ctrl">
+    <label for="seed">Seed</label>
+    <div class="seed-row">
+      <input type="text" class="seed mono" id="seed" value="yasp">
+      <button class="ghost" id="shuffle" title="New random seed">↻</button>
+    </div>
+  </div>
+  <div class="ctrl">
+    <label>&nbsp;</label>
+    <button class="primary" id="sheetBtn">Export sheet</button>
+  </div>
+</div>
+
+<div class="pinned-wrap" id="pinnedWrap" style="display:none;">
+  <div class="section-label">Pinned</div>
+  <div class="pinned-row" id="pinnedRow"></div>
+</div>
+
+<div class="gallery" id="gallery"></div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal">
+    <button class="close-x" id="closeX" aria-label="Close">×</button>
+    <div class="preview" id="modalPreview"></div>
+    <div class="meta">
+      <h3 id="modalTitle">Mark 00</h3>
+      <div class="params mono" id="modalParams"></div>
+      <div class="actions">
+        <button id="pinBtn">Pin to board</button>
+        <div class="row">
+          <button id="dlSvg">Download SVG</button>
+          <button id="dlPng">Download PNG</button>
+        </div>
+        <button class="ghost" id="copySvg">Copy SVG markup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Seeded RNG — xmur3 hash + mulberry32. Deterministic per seed.
+   ============================================================ */
+function xmur3(str){
+  let h=1779033703^str.length;
+  for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}
+  return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};
+}
+function mulberry32(a){
+  return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};
+}
+function makeRng(str){const s=xmur3(str);return mulberry32(s());}
+
+const SYM_ENGINES=["mirror-v","quad","rotate","diagonal","mirror-h"];
+
+/* ============================================================
+   Mark generation. Returns boolean grid g×g.
+   ============================================================ */
+function generate(p){
+  const g=p.grid, d=p.density, r=makeRng(p.seed+"|"+p.engine+"|"+g+"|"+Math.round(d*100));
+  let eng=p.engine;
+  if(eng==="mix") eng=SYM_ENGINES[Math.floor(r()*SYM_ENGINES.length)];
+  const cells=Array.from({length:g},()=>new Array(g).fill(false));
+  const F=()=>r()<d;
+
+  if(eng==="mirror-v"){
+    const half=Math.ceil(g/2);
+    for(let y=0;y<g;y++)for(let x=0;x<half;x++){const v=F();cells[y][x]=v;cells[y][g-1-x]=v;}
+  }else if(eng==="mirror-h"){
+    const half=Math.ceil(g/2);
+    for(let y=0;y<half;y++)for(let x=0;x<g;x++){const v=F();cells[y][x]=v;cells[g-1-y][x]=v;}
+  }else if(eng==="quad"){
+    const half=Math.ceil(g/2);
+    for(let y=0;y<half;y++)for(let x=0;x<half;x++){const v=F();cells[y][x]=v;cells[y][g-1-x]=v;cells[g-1-y][x]=v;cells[g-1-y][g-1-x]=v;}
+  }else if(eng==="rotate"){
+    const total=g*g, halfN=Math.ceil(total/2);
+    for(let i=0;i<halfN;i++){const y=Math.floor(i/g),x=i%g;const v=F();cells[y][x]=v;cells[g-1-y][g-1-x]=v;}
+  }else if(eng==="diagonal"){
+    for(let y=0;y<g;y++)for(let x=0;x<=y;x++){const v=F();cells[y][x]=v;cells[x][y]=v;}
+  }else{ /* free */
+    for(let y=0;y<g;y++)for(let x=0;x<g;x++)cells[y][x]=F();
+    keepLargest(cells,g);
+    return guard(cells,g);
+  }
+
+  if(p.clean) despeckle(cells,g);
+  return guard(cells,g);
+}
+
+/* Remove isolated cells (no orthogonal neighbour). Symmetric-safe. */
+function despeckle(c,g){
+  const rm=[];
+  for(let y=0;y<g;y++)for(let x=0;x<g;x++){
+    if(!c[y][x])continue;
+    let n=0;
+    if(y>0&&c[y-1][x])n++; if(y<g-1&&c[y+1][x])n++;
+    if(x>0&&c[y][x-1])n++; if(x<g-1&&c[y][x+1])n++;
+    if(n===0)rm.push([y,x]);
+  }
+  rm.forEach(([y,x])=>c[y][x]=false);
+}
+
+/* Keep only the largest 4-connected component (for free engine). */
+function keepLargest(c,g){
+  const seen=Array.from({length:g},()=>new Array(g).fill(false));
+  let best=[];
+  for(let y=0;y<g;y++)for(let x=0;x<g;x++){
+    if(c[y][x]&&!seen[y][x]){
+      const stack=[[y,x]],comp=[];seen[y][x]=true;
+      while(stack.length){
+        const [cy,cx]=stack.pop();comp.push([cy,cx]);
+        [[cy-1,cx],[cy+1,cx],[cy,cx-1],[cy,cx+1]].forEach(([ny,nx])=>{
+          if(ny>=0&&ny<g&&nx>=0&&nx<g&&c[ny][nx]&&!seen[ny][nx]){seen[ny][nx]=true;stack.push([ny,nx]);}
+        });
+      }
+      if(comp.length>best.length)best=comp;
+    }
+  }
+  for(let y=0;y<g;y++)for(let x=0;x<g;x++)c[y][x]=false;
+  best.forEach(([y,x])=>c[y][x]=true);
+}
+
+/* Never return an empty or near-full mark. */
+function guard(c,g){
+  let count=0;c.forEach(row=>row.forEach(v=>{if(v)count++;}));
+  if(count===0){const m=Math.floor(g/2);c[m][m]=true;}
+  return c;
+}
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+function buildSvg(cells,g,gapPct,sizePx){
+  const unit=sizePx/g;
+  const gap=(gapPct/100)*unit;
+  let rects="";
+  for(let y=0;y<g;y++)for(let x=0;x<g;x++){
+    if(!cells[y][x])continue;
+    const px=(x*unit+gap/2).toFixed(2), py=(y*unit+gap/2).toFixed(2);
+    const s=(unit-gap).toFixed(2);
+    rects+=`<rect x="${px}" y="${py}" width="${s}" height="${s}" fill="#F0E8D8"/>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sizePx} ${sizePx}" shape-rendering="crispEdges">${rects}</svg>`;
+}
+
+function paramSig(p){return `${p.seed} · ${p.engine} · ${p.grid}×${p.grid} · ${Math.round(p.density*100)}% · gap ${p.gap}`;}
+
+/* ============================================================
+   State + DOM
+   ============================================================ */
+const COUNT=100;
+const els={
+  gallery:document.getElementById("gallery"),
+  engine:document.getElementById("engine"),
+  grid:document.getElementById("grid"),
+  gridVal:document.getElementById("gridVal"),
+  density:document.getElementById("density"),
+  densityVal:document.getElementById("densityVal"),
+  gap:document.getElementById("gap"),
+  gapVal:document.getElementById("gapVal"),
+  seed:document.getElementById("seed"),
+  shuffle:document.getElementById("shuffle"),
+  clean:document.getElementById("cleanToggle"),
+  sheetBtn:document.getElementById("sheetBtn"),
+  pinnedWrap:document.getElementById("pinnedWrap"),
+  pinnedRow:document.getElementById("pinnedRow"),
+  overlay:document.getElementById("overlay"),
+  modal:document.getElementById("modal"),
+  closeX:document.getElementById("closeX"),
+  mPreview:document.getElementById("modalPreview"),
+  mTitle:document.getElementById("modalTitle"),
+  mParams:document.getElementById("modalParams"),
+  pinBtn:document.getElementById("pinBtn"),
+  dlSvg:document.getElementById("dlSvg"),
+  dlPng:document.getElementById("dlPng"),
+  copySvg:document.getElementById("copySvg"),
+  toast:document.getElementById("toast"),
+};
+
+let pinned=[];      // array of param objects
+let active=null;    // currently open mark params
+
+function readControls(){
+  return {
+    engine:els.engine.value,
+    grid:+els.grid.value,
+    density:+els.density.value/100,
+    gap:+els.gap.value,
+    clean:els.clean.classList.contains("on"),
+    baseSeed:els.seed.value.trim()||"yasp",
+  };
+}
+
+function tileParams(base,i){
+  return {seed:`${base.baseSeed}-${i}`,engine:base.engine,grid:base.grid,density:base.density,gap:base.gap,clean:base.clean};
+}
+
+function render(){
+  const base=readControls();
+  els.gallery.innerHTML="";
+  const frag=document.createDocumentFragment();
+  for(let i=0;i<COUNT;i++){
+    const p=tileParams(base,i);
+    const cells=generate(p);
+    const btn=document.createElement("button");
+    btn.className="tile"+(isPinned(p)?" pinned":"");
+    btn.innerHTML=
+      `<span class="idx mono">${String(i).padStart(2,"0")}</span>`+
+      `<span class="star">${starSvg()}</span>`+
+      buildSvg(cells,p.grid,p.gap,100);
+    btn.addEventListener("click",()=>openModal(p,i));
+    frag.appendChild(btn);
+  }
+  els.gallery.appendChild(frag);
+}
+
+function starSvg(){
+  return `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.1 1.2 6L12 16.9 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg>`;
+}
+
+/* ---------- Modal ---------- */
+function openModal(p,i){
+  active={...p,index:i};
+  const cells=generate(p);
+  els.mPreview.innerHTML=buildSvg(cells,p.grid,p.gap,200);
+  els.mTitle.textContent="Mark "+String(i).padStart(2,"0");
+  els.mParams.innerHTML=
+    `seed <b>${p.seed}</b><br>engine <b>${p.engine}</b><br>grid <b>${p.grid}×${p.grid}</b><br>density <b>${Math.round(p.density*100)}%</b><br>block gap <b>${p.gap}</b>`;
+  els.pinBtn.textContent=isPinned(p)?"Unpin":"Pin to board";
+  els.overlay.classList.add("open");
+}
+function closeModal(){els.overlay.classList.remove("open");active=null;}
+
+/* ---------- Pinning ---------- */
+function pinKey(p){return `${p.seed}|${p.engine}|${p.grid}|${Math.round(p.density*100)}|${p.gap}|${p.clean}`;}
+function isPinned(p){return pinned.some(q=>pinKey(q)===pinKey(p));}
+function togglePin(p){
+  if(isPinned(p)){pinned=pinned.filter(q=>pinKey(q)!==pinKey(p));}
+  else{pinned.push({...p});}
+  renderPinned();render();
+}
+function renderPinned(){
+  els.pinnedWrap.style.display=pinned.length?"block":"none";
+  els.pinnedRow.innerHTML="";
+  pinned.forEach((p,k)=>{
+    const cells=generate(p);
+    const btn=document.createElement("button");
+    btn.className="tile pinned";
+    btn.style.width="80px";btn.style.height="80px";btn.style.aspectRatio="auto";
+    btn.innerHTML=`<span class="star">${starSvg()}</span>`+buildSvg(cells,p.grid,p.gap,100);
+    btn.addEventListener("click",()=>openModal(p,k));
+    els.pinnedRow.appendChild(btn);
+  });
+}
+
+/* ============================================================
+   Export
+   ============================================================ */
+function download(name,data,type){
+  const blob=new Blob([data],{type});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function svgString(p){return buildSvg(generate(p),p.grid,p.gap,400);}
+
+function exportSvg(p){
+  download(`mark-${p.seed}.svg`,svgString(p),"image/svg+xml");
+  toast("SVG downloaded");
+}
+function exportPng(p,scale){
+  scale=scale||4;
+  const size=400*scale/4*4; // 400 base; scale up
+  const out=1600;
+  const svg=buildSvg(generate(p),p.grid,p.gap,out);
+  const img=new Image();
+  const url="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+  img.onload=()=>{
+    const c=document.createElement("canvas");c.width=out;c.height=out;
+    const ctx=c.getContext("2d");ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(img,0,0,out,out);
+    c.toBlob(b=>{
+      const u=URL.createObjectURL(b);const a=document.createElement("a");
+      a.href=u;a.download=`mark-${p.seed}.png`;a.click();
+      setTimeout(()=>URL.revokeObjectURL(u),1000);toast("PNG downloaded");
+    },"image/png");
+  };
+  img.src=url;
+}
+function copySvg(p){
+  const txt=svgString(p);
+  navigator.clipboard?.writeText(txt).then(()=>toast("SVG markup copied")).catch(()=>toast("Copy failed"));
+}
+
+/* Contact sheet — all 100 current marks in one 10×10 SVG. */
+function exportSheet(){
+  const base=readControls();
+  const cellPx=120, pad=16, cols=10, rows=10;
+  const W=cols*cellPx, H=rows*cellPx;
+  let body="";
+  for(let i=0;i<COUNT;i++){
+    const p=tileParams(base,i);
+    const cells=generate(p);
+    const ox=(i%cols)*cellPx, oy=Math.floor(i/cols)*cellPx;
+    const unit=(cellPx-pad*2)/p.grid;
+    const gap=(p.gap/100)*unit;
+    for(let y=0;y<p.grid;y++)for(let x=0;x<p.grid;x++){
+      if(!cells[y][x])continue;
+      const px=(ox+pad+x*unit+gap/2).toFixed(2), py=(oy+pad+y*unit+gap/2).toFixed(2);
+      const s=(unit-gap).toFixed(2);
+      body+=`<rect x="${px}" y="${py}" width="${s}" height="${s}" fill="#F0E8D8"/>`;
+    }
+  }
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" shape-rendering="crispEdges"><rect width="${W}" height="${H}" fill="#0A0B0D"/>${body}</svg>`;
+  download(`pixel-mark-sheet-${base.baseSeed}.svg`,svg,"image/svg+xml");
+  toast("Contact sheet exported");
+}
+
+/* ---------- Toast ---------- */
+let toastT;
+function toast(msg){
+  els.toast.textContent=msg;els.toast.classList.add("show");
+  clearTimeout(toastT);toastT=setTimeout(()=>els.toast.classList.remove("show"),1600);
+}
+
+/* ============================================================
+   Wiring
+   ============================================================ */
+function syncLabels(){
+  els.gridVal.textContent=`${els.grid.value}×${els.grid.value}`;
+  els.densityVal.textContent=`${els.density.value}%`;
+  els.gapVal.textContent=els.gap.value;
+}
+let rafT;
+function reRender(){cancelAnimationFrame(rafT);rafT=requestAnimationFrame(render);}
+
+els.engine.addEventListener("change",render);
+[els.grid,els.density,els.gap].forEach(el=>el.addEventListener("input",()=>{syncLabels();reRender();}));
+els.seed.addEventListener("input",reRender);
+els.shuffle.addEventListener("click",()=>{els.seed.value=Math.random().toString(36).slice(2,8);render();});
+els.clean.addEventListener("click",()=>{els.clean.classList.toggle("on");render();});
+els.sheetBtn.addEventListener("click",exportSheet);
+
+els.closeX.addEventListener("click",closeModal);
+els.overlay.addEventListener("click",e=>{if(e.target===els.overlay)closeModal();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+els.pinBtn.addEventListener("click",()=>{if(active){togglePin(active);els.pinBtn.textContent=isPinned(active)?"Unpin":"Pin to board";}});
+els.dlSvg.addEventListener("click",()=>{if(active)exportSvg(active);});
+els.dlPng.addEventListener("click",()=>{if(active)exportPng(active);});
+els.copySvg.addEventListener("click",()=>{if(active)copySvg(active);});
+
+syncLabels();
+render();
+</script>
+</body>
+</html>

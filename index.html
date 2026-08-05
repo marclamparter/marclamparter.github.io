@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generators — Marc Lamparter</title>
+<style>
+  :root {
+    --bg: #0A0B0D;
+    --card: #131519;
+    --border: #23252A;
+    --cream: #F0E8D8;
+    --muted: #8A8475;
+    --dim: #3A3B3E;
+    --gold: #E8B84B;
+    --blue: #5BA8C9;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--cream); font-family: var(--sans); min-height: 100vh; }
+
+  header {
+    padding: 60px 48px 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 10px;
+  }
+  header p {
+    font-size: 15px;
+    color: var(--muted);
+    max-width: 520px;
+    line-height: 1.6;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border-top: 1px solid var(--border);
+  }
+
+  .card {
+    background: var(--card);
+    padding: 28px 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s;
+    min-height: 160px;
+  }
+  .card:hover { background: #181A1F; }
+
+  .card-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .card h2 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    line-height: 1.3;
+  }
+  .card p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+    flex: 1;
+  }
+  .card-link {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-top: 6px;
+  }
+  .card:hover .card-link { color: var(--cream); }
+
+  footer {
+    padding: 32px 48px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  @media (max-width: 600px) {
+    header { padding: 40px 24px 28px; }
+    footer { padding: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Marc Lamparter</div>
+  <h1>Generators</h1>
+  <p>A collection of browser-based visual tools — diagrams, patterns, brand systems, and generative art. Open any generator and use it directly, no download needed.</p>
+</header>
+
+<div class="grid">
+
+  <a class="card" href="diagram-studio.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>Diagram Studio</h2>
+    <p>Interactive isometric diagram builder. Compose layered architecture visuals, hardware stacks, and system flows.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="beam-swarm.html">
+    <span class="card-tag">Generative</span>
+    <h2>Beam Swarm</h2>
+    <p>Generates flowing beam and particle swarm visuals. Control density, direction, color, and motion.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="halftone.html">
+    <span class="card-tag">Patterns</span>
+    <h2>Halftone Studio</h2>
+    <p>Halftone dot pattern generator. Adjust scale, density, shape, and color for print-ready outputs.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="chart-studio.html">
+    <span class="card-tag">Data Viz</span>
+    <h2>Chart Studio</h2>
+    <p>Build styled data visualizations — bar charts, line graphs, and area charts with full design control.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="glyph-studio.html">
+    <span class="card-tag">Typography</span>
+    <h2>Glyph Studio</h2>
+    <p>Compose typographic layouts with custom glyphs, spacing, and visual rhythm. Export as SVG.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="pattern-generator.html">
+    <span class="card-tag">Patterns</span>
+    <h2>Pattern Generator</h2>
+    <p>Geometric pattern system. Lissajous curves, grids, and modular tile patterns with live preview.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="pixel-mark-studio.html">
+    <span class="card-tag">Brand</span>
+    <h2>Pixel Mark Studio</h2>
+    <p>Pixel-grid mark and logo builder. Design monogram marks and symbols on a constrained grid.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="descent.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>The Descent</h2>
+    <p>Diagram generator for pipeline and compilation flow visuals. Layered descent and kernel diagrams.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="matrix.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>Matrix</h2>
+    <p>Grid-based matrix diagram generator for comparison tables, positioning maps, and visual frameworks.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="manifesto.html">
+    <span class="card-tag">Brand</span>
+    <h2>Manifesto</h2>
+    <p>Visual manifesto and bold statement generator. High-contrast typographic layouts for brand declarations.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="independent-layer.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>Independent Layer</h2>
+    <p>Silicon and hardware abstraction layer diagram builder. Isometric layer stacks and chip visualizations.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="symbol-foundry.html">
+    <span class="card-tag">Brand</span>
+    <h2>Symbol Foundry</h2>
+    <p>Symbol and icon design tool. Build geometric marks, curves, and abstract glyphs from primitives.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="beam-swarm.html">
+    <span class="card-tag">Generative</span>
+    <h2>Beam Pattern</h2>
+    <p>Directional beam field generator. Create structured light patterns for backgrounds and covers.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="beam-dataflow.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>Beam Dataflow</h2>
+    <p>Data pipeline flow diagram generator. Visualize processing stages, nodes, and data movement.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="brand-pattern.html">
+    <span class="card-tag">Brand</span>
+    <h2>Brand Pattern</h2>
+    <p>Brand pattern system generator. Build cohesive repeating patterns for brand identity systems.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="descent-gridcell.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>Descent Gridcell</h2>
+    <p>Kernel and gridcell diagram builder for GPU/AI hardware pipeline visualizations.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="descent-surfaces.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>Descent Surfaces</h2>
+    <p>Multi-surface diagram explorer showing three architectural approaches side by side.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="pattern-studio.html">
+    <span class="card-tag">Patterns</span>
+    <h2>Pattern Studio</h2>
+    <p>Line-art pattern generator with modular controls. Export clean SVGs for print and screen.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="bridge.html">
+    <span class="card-tag">Diagrams</span>
+    <h2>The Bridge</h2>
+    <p>Cover and diagram generator. 00-D series visual — minimal bridge compositions for editorial use.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+  <a class="card" href="showcase.html">
+    <span class="card-tag">Showcase</span>
+    <h2>Showcase</h2>
+    <p>Generator showcase viewer. Preview and compare outputs across the full generator collection.</p>
+    <span class="card-link">Open →</span>
+  </a>
+
+</div>
+
+<footer>marclamparter.github.io — open in browser, no install needed</footer>
+
+</body>
+</html>
