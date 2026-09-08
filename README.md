@@ -27,4 +27,4 @@ If you want to open a specific generator directly, click the link next to its na
 - [Descent Surfaces](https://marclamparter.github.io/descent-surfaces.html) — architecture diagram explorer
 - [Pattern Studio](https://marclamparter.github.io/pattern-studio.html) — line-art pattern generator
 - [The Bridge](https://marclamparter.github.io/bridge.html) — minimal editorial composer
-- [Showcase](https://marclamparter.github.io/showcase.html) — preview all generators
+- [Showcase](https://marclamparter.github.io/showcase.html) — software showcase prototype
